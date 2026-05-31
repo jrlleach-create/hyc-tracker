@@ -1,0 +1,2257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hackensack Yacht Club — Work Tracker</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <style>
+    :root {
+      --navy: #0a1628;
+      --blue: #1a3a6b;
+      --gold: #c9a84c;
+      --gold-light: #e8c97a;
+      --white: #f8f9fa;
+      --gray: #6c757d;
+      --light: #e9ecef;
+      --green: #2d7d46;
+      --red: #b02a37;
+      --amber: #b07d1a;
+      --radius: 8px;
+      --shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--navy);
+      color: var(--white);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%);
+      border-bottom: 3px solid var(--gold);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo {
+      width: 52px; height: 52px;
+      background: var(--gold);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px; flex-shrink: 0;
+    }
+
+    header h1 { font-size: 1.4rem; font-weight: 700; color: var(--white); }
+    header p  { font-size: 0.85rem; color: var(--gold-light); margin-top: 2px; }
+
+    /* ── Nav Tabs ── */
+    nav {
+      background: var(--blue);
+      display: flex;
+      padding: 0 24px;
+      gap: 4px;
+      border-bottom: 2px solid rgba(201,168,76,0.3);
+    }
+
+    nav button {
+      background: none; border: none; color: rgba(255,255,255,0.6);
+      padding: 12px 20px; cursor: pointer; font-size: 0.9rem;
+      border-bottom: 3px solid transparent; margin-bottom: -2px;
+      transition: all 0.2s;
+    }
+    nav button:hover  { color: var(--white); }
+    nav button.active { color: var(--gold); border-bottom-color: var(--gold); font-weight: 600; }
+
+    /* ── Main ── */
+    main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ── Cards & Grids ── */
+    .card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .card-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px;
+    }
+    .card-header h2 { font-size: 1.1rem; color: var(--gold-light); }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    /* ── Stat Tiles ── */
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .stat {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(201,168,76,0.25);
+      border-radius: var(--radius);
+      padding: 16px; text-align: center;
+    }
+    .stat-num { font-size: 2rem; font-weight: 700; color: var(--gold); }
+    .stat-lbl { font-size: 0.78rem; color: rgba(255,255,255,0.6); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    /* ── Forms ── */
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .form-row.three { grid-template-columns: 1fr 1fr 1fr; }
+    .form-row.single { grid-template-columns: 1fr; }
+    @media (max-width: 640px) { .form-row, .form-row.three { grid-template-columns: 1fr; } }
+
+    label { display: block; font-size: 0.8rem; color: var(--gold-light); margin-bottom: 4px; }
+
+    input, select, textarea {
+      width: 100%; padding: 9px 12px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px; color: var(--white); font-size: 0.9rem;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: var(--gold);
+    }
+    select option { background: var(--blue); }
+    textarea { resize: vertical; min-height: 72px; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 9px 18px; border: none; border-radius: 6px;
+      cursor: pointer; font-size: 0.875rem; font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: var(--gold); color: var(--navy); }
+    .btn-primary:hover { background: var(--gold-light); }
+    .btn-sm { padding: 5px 12px; font-size: 0.78rem; }
+    .btn-danger { background: rgba(176,42,55,0.3); color: #ff8a8a; border: 1px solid rgba(176,42,55,0.5); }
+    .btn-danger:hover { background: rgba(176,42,55,0.55); }
+    .btn-ghost { background: rgba(255,255,255,0.08); color: var(--white); border: 1px solid rgba(255,255,255,0.15); }
+    .btn-ghost:hover { background: rgba(255,255,255,0.15); }
+    .btn-success { background: rgba(45,125,70,0.3); color: #7fffaa; border: 1px solid rgba(45,125,70,0.5); }
+    .btn-success:hover { background: rgba(45,125,70,0.55); }
+
+    /* ── Tables ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    th {
+      text-align: left; padding: 10px 12px;
+      border-bottom: 2px solid rgba(201,168,76,0.4);
+      color: var(--gold-light); font-weight: 600; white-space: nowrap;
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.07); vertical-align: middle; }
+    tr:hover td { background: rgba(255,255,255,0.04); }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-block; padding: 3px 9px; border-radius: 12px;
+      font-size: 0.75rem; font-weight: 600;
+    }
+    .badge-pending  { background: rgba(176,125,26,0.3);  color: #ffd166; }
+    .badge-active   { background: rgba(26,58,107,0.6);   color: #74b3ff; }
+    .badge-done     { background: rgba(45,125,70,0.3);   color: #7fffaa; }
+    .badge-overdue  { background: rgba(176,42,55,0.3);   color: #ff8a8a; }
+    .badge-recurring{ background: rgba(120,80,200,0.3);  color: #c4a8ff; }
+
+    /* ── Priority dots ── */
+    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
+    .dot-low    { background: #6c757d; }
+    .dot-med    { background: #ffd166; }
+    .dot-high   { background: #ff8a8a; }
+
+    /* ── Empty state ── */
+    .empty { text-align: center; padding: 40px 20px; color: rgba(255,255,255,0.35); }
+    .empty .icon { font-size: 2.5rem; margin-bottom: 8px; }
+
+    /* ── Modal ── */
+    .modal-bg {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7); z-index: 100;
+      align-items: center; justify-content: center;
+    }
+    .modal-bg.open { display: flex; }
+    .modal {
+      background: #0f2044;
+      border: 1px solid rgba(201,168,76,0.4);
+      border-radius: var(--radius);
+      padding: 28px; width: 100%; max-width: 520px;
+      max-height: 90vh; overflow-y: auto;
+      margin: 16px;
+    }
+    .modal h3 { color: var(--gold-light); margin-bottom: 18px; font-size: 1.1rem; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+
+    /* ── Activity feed ── */
+    .feed-item {
+      display: flex; gap: 12px; padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      font-size: 0.85rem;
+    }
+    .feed-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+    .feed-time { color: rgba(255,255,255,0.4); font-size: 0.75rem; margin-top: 2px; }
+
+    /* ── Member avatar ── */
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--blue); border: 2px solid var(--gold);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700; color: var(--gold-light);
+      flex-shrink: 0;
+    }
+
+    /* ── Search ── */
+    .search-bar { position: relative; margin-bottom: 16px; }
+    .search-bar input { padding-left: 36px; }
+    .search-bar::before {
+      content: '🔍'; position: absolute; left: 10px; top: 50%;
+      transform: translateY(-50%); font-size: 0.85rem;
+    }
+
+    /* ── Progress bar ── */
+    .progress-bar { background: rgba(255,255,255,0.1); border-radius: 4px; height: 6px; overflow: hidden; margin-top: 4px; }
+    .progress-fill { height: 100%; background: var(--gold); border-radius: 4px; transition: width 0.4s; }
+
+    /* ── Multi-select ── */
+    .ms-wrap { position: relative; }
+    .ms-trigger {
+      width: 100%; min-height: 38px; padding: 5px 32px 5px 10px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px; color: var(--white); font-size: 0.9rem;
+      cursor: pointer; text-align: left; display: flex; flex-wrap: wrap;
+      gap: 4px; align-items: center; position: relative;
+      transition: border-color 0.2s;
+    }
+    .ms-trigger:focus, .ms-trigger.open { outline: none; border-color: var(--gold); }
+    .ms-trigger::after {
+      content: '▾'; position: absolute; right: 10px; top: 50%;
+      transform: translateY(-50%); color: rgba(255,255,255,0.5); font-size: 0.8rem;
+    }
+    .ms-tag {
+      background: rgba(201,168,76,0.25); border: 1px solid rgba(201,168,76,0.4);
+      color: var(--gold-light); padding: 2px 7px; border-radius: 10px; font-size: 0.75rem;
+      display: flex; align-items: center; gap: 4px; white-space: nowrap;
+    }
+    .ms-tag-x { cursor: pointer; opacity: 0.7; font-size: 0.85rem; line-height: 1; }
+    .ms-tag-x:hover { opacity: 1; }
+    .ms-placeholder { color: rgba(255,255,255,0.35); font-size: 0.875rem; }
+    .ms-dropdown {
+      display: none; position: absolute; z-index: 200; top: calc(100% + 4px); left: 0; right: 0;
+      background: #0f2044; border: 1px solid rgba(201,168,76,0.4);
+      border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      max-height: 260px; overflow-y: auto;
+    }
+    .ms-dropdown.open { display: block; }
+    .ms-search {
+      padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .ms-search input {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px; padding: 5px 9px; color: var(--white); font-size: 0.82rem; width: 100%;
+    }
+    .ms-search input:focus { outline: none; border-color: var(--gold); }
+    .ms-option {
+      padding: 8px 12px; cursor: pointer; font-size: 0.875rem;
+      display: flex; align-items: center; gap: 8px;
+      transition: background 0.15s;
+    }
+    .ms-option:hover { background: rgba(255,255,255,0.07); }
+    .ms-option input[type=checkbox] { width: auto; accent-color: var(--gold); }
+    .ms-add-custom {
+      padding: 8px 12px; border-top: 1px solid rgba(255,255,255,0.1);
+      display: flex; gap: 6px;
+    }
+    .ms-add-custom input {
+      flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px; padding: 5px 9px; color: var(--white); font-size: 0.82rem;
+    }
+    .ms-add-custom input:focus { outline: none; border-color: var(--gold); }
+    .ms-add-custom button {
+      background: rgba(201,168,76,0.2); border: 1px solid rgba(201,168,76,0.4);
+      color: var(--gold-light); border-radius: 4px; padding: 4px 10px;
+      cursor: pointer; font-size: 0.8rem;
+    }
+    .ms-add-custom button:hover { background: rgba(201,168,76,0.35); }
+
+    /* ── Print ── */
+    @media print {
+      body { background: white; color: black; }
+      header, nav, #login-overlay, .modal-bg { display: none !important; }
+      #print-sheet { display: block !important; }
+      #attendance-modal { display: block !important; position: static; background: none; }
+      .modal { border: none; background: white; color: black; max-width: 100%; }
+      .modal h3, .modal p { color: black; }
+      th { border-bottom: 2px solid #333; color: #333; }
+      td { border-bottom: 1px solid #ccc; color: #333; }
+      .btn, .admin-only, #att-signin-row, #att-admin-row { display: none !important; }
+    }
+
+    /* ── Login overlay ── */
+    #login-overlay {
+      position: fixed; inset: 0; z-index: 500;
+      background: var(--navy);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #login-overlay.hidden { display: none; }
+    .login-box {
+      background: #0f2044;
+      border: 1px solid rgba(201,168,76,0.4);
+      border-radius: var(--radius);
+      padding: 36px 32px;
+      width: 100%; max-width: 400px; margin: 16px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+    }
+    .login-box .logo { margin: 0 auto 16px; }
+    .login-box h2 { text-align: center; font-size: 1.2rem; color: var(--gold-light); margin-bottom: 4px; }
+    .login-box p  { text-align: center; font-size: 0.82rem; color: rgba(255,255,255,0.45); margin-bottom: 24px; }
+    .login-tabs { display: flex; gap: 0; margin-bottom: 24px; border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,0.12); }
+    .login-tab {
+      flex: 1; padding: 9px; text-align: center; cursor: pointer;
+      font-size: 0.875rem; color: rgba(255,255,255,0.5);
+      background: rgba(255,255,255,0.04); border: none; transition: all 0.2s;
+    }
+    .login-tab.active { background: rgba(201,168,76,0.2); color: var(--gold-light); font-weight: 600; }
+    .login-error { color: #ff8a8a; font-size: 0.82rem; margin-top: 8px; min-height: 18px; }
+
+    /* ── Permission system ── */
+    .member-mode .admin-only { display: none !important; }
+
+    /* ── Header user chip ── */
+    .user-chip {
+      margin-left: auto; display: flex; align-items: center; gap: 10px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 20px; padding: 5px 14px 5px 8px;
+      font-size: 0.82rem;
+    }
+    .user-chip .avatar { width: 26px; height: 26px; font-size: 0.65rem; border-width: 1px; }
+    .user-chip .name { color: var(--white); }
+    .user-chip .role-lbl { color: var(--gold-light); font-size: 0.75rem; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.3); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- Login Overlay -->
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="logo" style="width:52px;height:52px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;">⚓</div>
+    <h2>Hackensack Yacht Club</h2>
+    <p>Work Tracker — Please sign in</p>
+    <div class="login-tabs">
+      <button class="login-tab active" onclick="switchLoginTab('member')">Member</button>
+      <button class="login-tab" onclick="switchLoginTab('admin')">Admin</button>
+    </div>
+    <!-- Member login -->
+    <div id="login-member-panel">
+      <div style="margin-bottom:12px;">
+        <label>Select Your Name</label>
+        <select id="login-member-select" style="width:100%;padding:9px 12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:var(--white);font-size:0.9rem;">
+          <option value="">— Choose your name —</option>
+        </select>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label>PIN <span style="color:rgba(255,255,255,0.35);font-size:0.75rem;">(if set)</span></label>
+        <input id="login-member-pin" type="password" placeholder="Leave blank if no PIN" style="width:100%;padding:9px 12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:var(--white);font-size:0.9rem;" onkeydown="if(event.key==='Enter')loginMember()" />
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="loginMember()">Sign In as Member</button>
+      <div class="login-error" id="login-member-error"></div>
+    </div>
+    <!-- Admin login -->
+    <div id="login-admin-panel" style="display:none;">
+      <div style="margin-bottom:16px;">
+        <label>Admin Password</label>
+        <input id="login-admin-pw" type="password" placeholder="Password" style="width:100%;padding:9px 12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:var(--white);font-size:0.9rem;" onkeydown="if(event.key==='Enter')loginAdmin()" />
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="loginAdmin()">Sign In as Admin</button>
+      <div class="login-error" id="login-admin-error"></div>
+    </div>
+  </div>
+</div>
+
+<header>
+  <div class="logo">⚓</div>
+  <div>
+    <h1>Hackensack Yacht Club</h1>
+    <p>Member Work Tracker</p>
+  </div>
+  <div id="sync-pill" style="display:none;font-size:0.75rem;padding:4px 12px;border-radius:12px;border:1px solid;white-space:nowrap;"></div>
+  <div class="user-chip" id="user-chip" style="display:none;">
+    <div class="avatar" id="user-avatar"></div>
+    <div><div class="name" id="user-name"></div><div class="role-lbl" id="user-role-lbl"></div></div>
+    <button class="btn btn-ghost btn-sm" style="padding:3px 10px;font-size:0.75rem;" onclick="logout()">Sign Out</button>
+  </div>
+</header>
+
+<nav>
+  <button class="active" onclick="showPanel('dashboard')">Dashboard</button>
+  <button onclick="showPanel('tasks')">Tasks</button>
+  <button onclick="showPanel('members')">Members</button>
+  <button onclick="showPanel('log')">Work Log</button>
+  <button onclick="showPanel('meetings')">Meetings</button>
+</nav>
+
+<main>
+
+  <!-- ── Dashboard ── -->
+  <div id="panel-dashboard" class="panel active">
+    <div class="stats" id="stats-row"></div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header"><h2>Recent Activity</h2></div>
+        <div id="activity-feed">
+          <div class="empty"><div class="icon">📋</div>No activity yet.</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Open Tasks by Member</h2></div>
+        <div id="member-task-summary"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tasks ── -->
+  <div id="panel-tasks" class="panel">
+    <div class="card admin-only">
+      <div class="card-header">
+        <h2>Add New Task</h2>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>Task Title *</label>
+          <input id="t-title" type="text" placeholder="e.g. Repaint dock cleats" />
+        </div>
+        <div>
+          <label>Category</label>
+          <select id="t-category">
+            <option value="">— Select —</option>
+            <option>Dock & Marina</option>
+            <option>Grounds & Landscaping</option>
+            <option>Clubhouse</option>
+            <option>Fleet / Boats</option>
+            <option>Events</option>
+            <option>Safety & Equipment</option>
+            <option>Administration</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row three">
+        <div>
+          <label>Assign To</label>
+          <select id="t-assignee"></select>
+        </div>
+        <div>
+          <label>Priority</label>
+          <select id="t-priority">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div>
+          <label>Due Date</label>
+          <input id="t-due" type="date" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>Timeline</label>
+          <input id="t-timeline" type="text" placeholder="e.g. Spring 2026, Jun 1–15, Week 3" />
+        </div>
+        <div>
+          <label>Description</label>
+          <textarea id="t-desc" placeholder="Optional details…" style="min-height:38px;"></textarea>
+        </div>
+      </div>
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="addTask()">Add Task</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearTaskForm()">Clear</button>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;color:rgba(255,255,255,0.7);font-size:0.85rem;">
+          <input type="checkbox" id="t-noassign" style="width:auto;accent-color:var(--gold);" />
+          No assignment needed
+        </label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>All Tasks</h2>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select id="filter-status" onchange="renderTasks()" style="width:auto;font-size:0.8rem;padding:6px 10px;">
+            <option value="">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="active">In Progress</option>
+            <option value="done">Done</option>
+          </select>
+          <select id="filter-member" onchange="renderTasks()" style="width:auto;font-size:0.8rem;padding:6px 10px;"></select>
+        </div>
+      </div>
+      <div class="search-bar">
+        <input id="task-search" type="text" placeholder="Search tasks…" oninput="renderTasks()" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Title</th><th>Category</th><th>Assigned To</th>
+              <th>Priority</th><th>Timeline</th><th>Due</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="task-table"></tbody>
+        </table>
+      </div>
+      <div id="task-empty" class="empty" style="display:none;">
+        <div class="icon">⚓</div>No tasks found.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Members ── -->
+  <div id="panel-members" class="panel">
+    <div class="card admin-only">
+      <div class="card-header"><h2>⚙ Admin Settings</h2></div>
+      <div class="form-row">
+        <div>
+          <label>New Admin Password</label>
+          <input id="admin-new-pw" type="password" placeholder="Enter new password" />
+        </div>
+        <div>
+          <label>Confirm Password</label>
+          <input id="admin-confirm-pw" type="password" placeholder="Confirm new password" />
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button class="btn btn-primary btn-sm" onclick="changeAdminPassword()">Change Password</button>
+        <span id="admin-pw-status" style="font-size:0.82rem;"></span>
+      </div>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:20px 0;" />
+      <h3 style="color:var(--gold-light);font-size:1rem;margin-bottom:14px;">☁ Cloud Sync (Supabase)</h3>
+      <p style="font-size:0.82rem;color:rgba(255,255,255,0.5);margin-bottom:14px;">
+        Enables real-time shared data across all devices.
+        <a href="https://supabase.com" target="_blank" style="color:var(--gold-light);">Create a free Supabase project</a>,
+        run the SQL below in the SQL Editor, then paste your credentials here.
+      </p>
+      <div style="background:rgba(0,0,0,0.3);border-radius:6px;padding:12px;font-size:0.78rem;font-family:monospace;color:#7fffaa;margin-bottom:16px;white-space:pre-wrap;user-select:all;">CREATE TABLE IF NOT EXISTS app_store (
+  key text PRIMARY KEY,
+  value jsonb NOT NULL,
+  updated_at timestamptz DEFAULT now()
+);
+ALTER TABLE app_store ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
+      <div class="form-row">
+        <div>
+          <label>Supabase Project URL</label>
+          <input id="sb-url" type="text" placeholder="https://xxxx.supabase.co" />
+        </div>
+        <div>
+          <label>Anon / Public Key</label>
+          <input id="sb-key" type="text" placeholder="eyJ…" />
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="saveSyncConfig()">Connect &amp; Sync</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearSyncConfig()">Disconnect</button>
+        <span id="sync-status-text" style="font-size:0.82rem;"></span>
+      </div>
+    </div>
+
+    <div class="card admin-only">
+      <div class="card-header">
+        <h2>Import from Spreadsheet</h2>
+        <span style="font-size:0.78rem;color:rgba(255,255,255,0.45);">CSV or Excel (.xlsx)</span>
+      </div>
+      <p style="font-size:0.82rem;color:rgba(255,255,255,0.55);margin-bottom:14px;">
+        Your file should have columns for first name, last name, and optionally role, email, and phone.
+        Column names are matched automatically — you can map them manually if needed.
+      </p>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <label class="btn btn-ghost" style="cursor:pointer;margin:0;">
+          📂 Choose File
+          <input type="file" id="import-file" accept=".csv,.xlsx,.xls" style="display:none;" onchange="handleImportFile(event)" />
+        </label>
+        <span id="import-filename" style="font-size:0.85rem;color:rgba(255,255,255,0.45);">No file chosen</span>
+      </div>
+      <div id="import-preview" style="display:none;margin-top:16px;">
+        <div style="font-size:0.82rem;color:var(--gold-light);margin-bottom:8px;" id="import-preview-label"></div>
+        <div class="table-wrap" style="max-height:220px;overflow-y:auto;">
+          <table id="import-preview-table" style="font-size:0.8rem;"></table>
+        </div>
+        <div id="import-map" style="margin-top:14px;display:none;">
+          <div style="font-size:0.82rem;color:var(--gold-light);margin-bottom:8px;">Map columns — select which spreadsheet column matches each field:</div>
+          <div class="form-row three" id="import-map-selects"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px;align-items:center;">
+          <button class="btn btn-primary" onclick="confirmImport()">Import Members</button>
+          <button class="btn btn-ghost btn-sm" onclick="cancelImport()">Cancel</button>
+          <span id="import-status" style="font-size:0.82rem;"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card admin-only">
+      <div class="card-header"><h2>Add Member</h2></div>
+      <div class="form-row three">
+        <div>
+          <label>First Name *</label>
+          <input id="m-first" type="text" placeholder="First" />
+        </div>
+        <div>
+          <label>Last Name *</label>
+          <input id="m-last" type="text" placeholder="Last" />
+        </div>
+        <div>
+          <label>Role / Position</label>
+          <div class="ms-wrap" id="ms-m-role"></div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>Email</label>
+          <input id="m-email" type="email" placeholder="member@email.com" />
+        </div>
+        <div>
+          <label>Phone</label>
+          <input id="m-phone" type="tel" placeholder="(201) 555-0100" />
+        </div>
+      </div>
+      <div class="form-row three">
+        <div>
+          <label>Boat Name</label>
+          <input id="m-boat" type="text" placeholder="e.g. Sea Breeze" />
+        </div>
+        <div>
+          <label>Boat Size (ft)</label>
+          <input id="m-boatsize" type="text" placeholder="e.g. 32" />
+        </div>
+        <div>
+          <label>Date Joined</label>
+          <input id="m-joined" type="date" />
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label>Street Address</label>
+          <input id="m-address" type="text" placeholder="123 Harbor Rd" />
+        </div>
+      </div>
+      <div class="form-row three">
+        <div>
+          <label>City</label>
+          <input id="m-city" type="text" placeholder="Hackensack" />
+        </div>
+        <div>
+          <label>State</label>
+          <input id="m-state" type="text" placeholder="NJ" maxlength="2" style="text-transform:uppercase" />
+        </div>
+        <div>
+          <label>ZIP</label>
+          <input id="m-zip" type="text" placeholder="07601" maxlength="10" />
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:4px;">
+        <div>
+          <label>Member PIN <span style="color:rgba(255,255,255,0.35);font-size:0.75rem;">(optional — for login)</span></label>
+          <input id="m-pin" type="password" placeholder="Leave blank for no PIN" />
+        </div>
+        <div></div>
+      </div>
+      <button class="btn btn-primary" onclick="addMember()">Add Member</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>Members</h2></div>
+      <div class="search-bar">
+        <input id="member-search" type="text" placeholder="Search members…" oninput="renderMembers()" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Member</th><th>Role</th><th>Boat</th><th>Email</th><th>Phone</th><th>Joined</th><th>Open Tasks</th><th>Hours</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="member-table"></tbody>
+        </table>
+      </div>
+      <div id="member-empty" class="empty" style="display:none;">
+        <div class="icon">👥</div>No members yet.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Work Log ── -->
+  <div id="panel-log" class="panel">
+    <div class="card">
+      <div class="card-header"><h2>Log Work Entry</h2></div>
+      <div class="form-row three">
+        <div>
+          <label>Member *</label>
+          <select id="l-member"></select>
+        </div>
+        <div>
+          <label>Task Title *</label>
+          <input id="l-title" type="text" placeholder="What was worked on?" />
+        </div>
+        <div>
+          <label>Hours *</label>
+          <input id="l-hours" type="number" min="0.25" step="0.25" placeholder="e.g. 2.5" />
+        </div>
+      </div>
+      <div class="form-row three">
+        <div>
+          <label>Task</label>
+          <select id="l-task" onchange="autoFillLogTitle(this.value)"></select>
+        </div>
+        <div>
+          <label>Timeline</label>
+          <input id="l-timeline" type="text" placeholder="e.g. Spring 2026" />
+        </div>
+        <div>
+          <label>Date *</label>
+          <input id="l-date" type="date" />
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label>Notes</label>
+          <input id="l-notes" type="text" placeholder="Additional details…" />
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button class="btn btn-primary" onclick="addLog()">Log Work</button>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;color:rgba(255,255,255,0.7);font-size:0.85rem;">
+          <input type="checkbox" id="l-complete" style="width:auto;" checked />
+          Mark task complete
+        </label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>Work Log</h2>
+        <span id="total-hours-badge" style="font-size:0.85rem;color:var(--gold-light);"></span>
+      </div>
+      <div class="search-bar">
+        <input id="log-search" type="text" placeholder="Search log…" oninput="renderLog()" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Member</th><th>Task Title</th><th>Timeline</th><th>Linked Task</th><th>Status</th><th>Hours</th><th>Notes</th><th>Del</th></tr>
+          </thead>
+          <tbody id="log-table"></tbody>
+        </table>
+      </div>
+      <div id="log-empty" class="empty" style="display:none;">
+        <div class="icon">📝</div>No work logged yet.
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── Meetings ── -->
+  <div id="panel-meetings" class="panel">
+
+    <!-- Create Meeting (admin only) -->
+    <div class="card admin-only">
+      <div class="card-header"><h2>Create Meeting</h2></div>
+      <div class="form-row three">
+        <div>
+          <label>Meeting Title *</label>
+          <input id="mtg-title" type="text" placeholder="e.g. Monthly General Meeting" />
+        </div>
+        <div>
+          <label>Date *</label>
+          <input id="mtg-date" type="date" />
+        </div>
+        <div>
+          <label>Location</label>
+          <input id="mtg-location" type="text" placeholder="e.g. Clubhouse" />
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label>Notes</label>
+          <input id="mtg-notes" type="text" placeholder="Optional agenda or notes" />
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="createMeeting()">Create Meeting</button>
+    </div>
+
+    <!-- Sign-in sheet -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Meetings</h2>
+        <select id="mtg-filter" onchange="renderMeetings()" style="width:auto;font-size:0.8rem;padding:6px 10px;">
+          <option value="upcoming">Upcoming &amp; Today</option>
+          <option value="past">Past</option>
+          <option value="all">All</option>
+        </select>
+      </div>
+      <div id="meetings-list">
+        <div class="empty"><div class="icon">📋</div>No meetings yet.</div>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<!-- Attendance Modal -->
+<div class="modal-bg" id="attendance-modal">
+  <div class="modal" style="max-width:640px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <h3 id="att-modal-title" style="margin:0;">Attendance</h3>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="printAttendance()">🖨 Print</button>
+        <button class="btn btn-ghost btn-sm" onclick="closeAttendanceModal()">✕</button>
+      </div>
+    </div>
+    <p id="att-modal-meta" style="font-size:0.82rem;color:rgba(255,255,255,0.45);margin-bottom:16px;"></p>
+
+    <!-- Member-visible sign-in button -->
+    <div id="att-signin-row" style="margin-bottom:16px;display:none;">
+      <button class="btn btn-primary" onclick="signMyselfIn()">✋ Sign Me In</button>
+      <span id="att-signed-status" style="font-size:0.85rem;margin-left:12px;color:#7fffaa;"></span>
+    </div>
+
+    <!-- Admin: sign in anyone -->
+    <div id="att-admin-row" class="admin-only" style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <select id="att-add-member" style="font-size:0.82rem;padding:6px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:var(--white);">
+        <option value="">— Sign in a member —</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="adminSignIn()">Sign In</button>
+    </div>
+
+    <div class="table-wrap" style="max-height:320px;overflow-y:auto;">
+      <table id="att-table">
+        <thead><tr><th>Member</th><th>Role</th><th>Signed In At</th><th class="admin-only">Remove</th></tr></thead>
+        <tbody id="att-tbody"></tbody>
+      </table>
+    </div>
+    <div id="att-empty" class="empty" style="display:none;padding:20px;">
+      <div class="icon">📝</div>No sign-ins yet.
+    </div>
+    <div style="margin-top:12px;font-size:0.82rem;color:rgba(255,255,255,0.4);" id="att-count"></div>
+  </div>
+</div>
+
+<!-- Edit Task Modal -->
+<div class="modal-bg" id="edit-modal">
+  <div class="modal">
+    <h3>Edit Task</h3>
+    <input type="hidden" id="edit-id" />
+    <div class="form-row single"><div><label>Title</label><input id="edit-title" type="text" /></div></div>
+    <div class="form-row">
+      <div>
+        <label>Category</label>
+        <select id="edit-category">
+          <option value="">— Select —</option>
+          <option>Dock & Marina</option><option>Grounds & Landscaping</option>
+          <option>Clubhouse</option><option>Fleet / Boats</option>
+          <option>Events</option><option>Safety & Equipment</option>
+          <option>Administration</option><option>Other</option>
+        </select>
+      </div>
+      <div>
+        <label>Assign To</label>
+        <select id="edit-assignee"></select>
+      </div>
+    </div>
+    <div class="form-row three">
+      <div>
+        <label>Priority</label>
+        <select id="edit-priority">
+          <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+        </select>
+      </div>
+      <div><label>Status</label>
+        <select id="edit-status">
+          <option value="pending">Pending</option>
+          <option value="active">In Progress</option>
+          <option value="done">Done</option>
+        </select>
+      </div>
+      <div><label>Due Date</label><input id="edit-due" type="date" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Timeline</label><input id="edit-timeline" type="text" placeholder="e.g. Spring 2026, Jun 1–15" /></div>
+      <div><label>Description</label><textarea id="edit-desc" style="min-height:38px;"></textarea></div>
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:rgba(255,255,255,0.7);font-size:0.85rem;">
+        <input type="checkbox" id="edit-noassign" style="width:auto;accent-color:var(--gold);" />
+        No assignment needed
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Member Modal -->
+<div class="modal-bg" id="edit-member-modal">
+  <div class="modal">
+    <h3>Edit Member</h3>
+    <input type="hidden" id="em-id" />
+    <div class="form-row">
+      <div><label>First Name *</label><input id="em-first" type="text" /></div>
+      <div><label>Last Name *</label><input id="em-last" type="text" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Role / Position</label><div class="ms-wrap" id="ms-em-role"></div></div>
+      <div><label>Email</label><input id="em-email" type="email" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Phone</label><input id="em-phone" type="tel" /></div>
+      <div><label>Date Joined</label><input id="em-joined" type="date" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Boat Name</label><input id="em-boat" type="text" /></div>
+      <div><label>Boat Size (ft)</label><input id="em-boatsize" type="text" /></div>
+    </div>
+    <div class="form-row single">
+      <div><label>Street Address</label><input id="em-address" type="text" /></div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Member PIN <span style="color:rgba(255,255,255,0.35);font-size:0.75rem;">(leave blank to keep current)</span></label>
+        <input id="em-pin" type="password" placeholder="Set or change PIN" />
+      </div>
+      <div></div>
+    </div>
+    <div class="form-row three">
+      <div><label>City</label><input id="em-city" type="text" /></div>
+      <div><label>State</label><input id="em-state" type="text" maxlength="2" style="text-transform:uppercase" /></div>
+      <div><label>ZIP</label><input id="em-zip" type="text" maxlength="10" /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeEditMember()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditMember()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+
+const STORE = {
+  load(k)    { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } },
+  save(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
+};
+
+let members  = STORE.load('hyc_members');
+let tasks    = STORE.load('hyc_tasks');
+let workLog  = STORE.load('hyc_log');
+let activity = STORE.load('hyc_activity');
+
+function save() {
+  STORE.save('hyc_members',  members);
+  STORE.save('hyc_tasks',    tasks);
+  STORE.save('hyc_log',      workLog);
+  STORE.save('hyc_activity', activity);
+}
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+function pushActivity(icon, text) {
+  activity.unshift({ icon, text, time: new Date().toISOString() });
+  if (activity.length > 50) activity.pop();
+  save();
+}
+
+// ── Navigation ─────────────────────────────────────────────────────────────
+
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  event.target.classList.add('active');
+  refreshAll();
+}
+
+// ── Members ────────────────────────────────────────────────────────────────
+
+function addMember() {
+  const first = document.getElementById('m-first').value.trim();
+  const last  = document.getElementById('m-last').value.trim();
+  if (!first || !last) { alert('First and last name are required.'); return; }
+  const m = {
+    id: uid(), first, last,
+    role:     msGet('ms-m-role'),
+    email:    document.getElementById('m-email').value.trim(),
+    phone:    document.getElementById('m-phone').value.trim(),
+    boat:     document.getElementById('m-boat').value.trim(),
+    boatSize: document.getElementById('m-boatsize').value.trim(),
+    joined:   document.getElementById('m-joined').value,
+    address:  document.getElementById('m-address').value.trim(),
+    city:     document.getElementById('m-city').value.trim(),
+    state:    document.getElementById('m-state').value.trim().toUpperCase(),
+    zip:      document.getElementById('m-zip').value.trim(),
+    pin:      document.getElementById('m-pin').value,
+  };
+  members.push(m);
+  pushActivity('👤', `Added member: ${first} ${last}`);
+  save();
+  ['m-first','m-email','m-phone','m-boat','m-boatsize','m-joined','m-address','m-city','m-state','m-zip','m-pin']
+    .forEach(id => document.getElementById(id).value = '');
+  msSet('ms-m-role', []);
+  refreshAll();
+}
+
+function openEditMember(id) {
+  const m = members.find(x => x.id === id); if (!m) return;
+  document.getElementById('em-id').value       = id;
+  document.getElementById('em-first').value    = m.first;
+  document.getElementById('em-last').value     = m.last;
+  msSet('ms-em-role', Array.isArray(m.role) ? m.role : (m.role ? [m.role] : []));
+  document.getElementById('em-email').value    = m.email    || '';
+  document.getElementById('em-phone').value    = m.phone    || '';
+  document.getElementById('em-boat').value     = m.boat     || '';
+  document.getElementById('em-boatsize').value = m.boatSize || '';
+  document.getElementById('em-joined').value   = m.joined   || '';
+  document.getElementById('em-address').value  = m.address  || '';
+  document.getElementById('em-city').value     = m.city     || '';
+  document.getElementById('em-state').value    = m.state    || '';
+  document.getElementById('em-zip').value      = m.zip      || '';
+  document.getElementById('edit-member-modal').classList.add('open');
+}
+
+function closeEditMember() { document.getElementById('edit-member-modal').classList.remove('open'); }
+
+function saveEditMember() {
+  const id = document.getElementById('em-id').value;
+  const m  = members.find(x => x.id === id); if (!m) return;
+  const first = document.getElementById('em-first').value.trim();
+  const last  = document.getElementById('em-last').value.trim();
+  if (!first || !last) { alert('First and last name are required.'); return; }
+  m.first    = first;
+  m.last     = last;
+  m.role     = msGet('ms-em-role');
+  m.email    = document.getElementById('em-email').value.trim();
+  m.phone    = document.getElementById('em-phone').value.trim();
+  m.boat     = document.getElementById('em-boat').value.trim();
+  m.boatSize = document.getElementById('em-boatsize').value.trim();
+  m.joined   = document.getElementById('em-joined').value;
+  m.address  = document.getElementById('em-address').value.trim();
+  m.city     = document.getElementById('em-city').value.trim();
+  m.state    = document.getElementById('em-state').value.trim().toUpperCase();
+  m.zip      = document.getElementById('em-zip').value.trim();
+  const newPin = document.getElementById('em-pin').value;
+  if (newPin) m.pin = newPin;
+  document.getElementById('em-pin').value = '';
+  pushActivity('✏️', `Updated member: ${first} ${last}`);
+  save(); closeEditMember(); refreshAll();
+}
+
+function deleteAllMembers() {
+  if (!members.length) return;
+  if (!confirm(`Delete all ${members.length} member(s)? Their tasks will be unassigned.`)) return;
+  tasks   = tasks.map(t => ({...t, assignee: ''}));
+  members = [];
+  pushActivity('🗑️', 'Deleted all members');
+  save(); refreshAll();
+}
+
+function deleteMember(id) {
+  const m = members.find(x => x.id === id);
+  if (!m) return;
+  if (!confirm(`Remove ${m.first} ${m.last}? Their tasks will be unassigned.`)) return;
+  tasks  = tasks.map(t => t.assignee === id ? {...t, assignee: ''} : t);
+  members = members.filter(x => x.id !== id);
+  pushActivity('🗑️', `Removed member: ${m.first} ${m.last}`);
+  save(); refreshAll();
+}
+
+function renderMembers() {
+  const q = document.getElementById('member-search').value.toLowerCase();
+  const filtered = members.filter(m =>
+    `${m.first} ${m.last} ${m.role} ${m.email}`.toLowerCase().includes(q)
+  );
+  const tbody = document.getElementById('member-table');
+  const empty = document.getElementById('member-empty');
+
+  if (!filtered.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(m => {
+    const open  = tasks.filter(t => t.assignee === m.id && t.status !== 'done').length;
+    const hours = workLog.filter(l => l.memberId === m.id).reduce((s, l) => s + (+l.hours||0), 0);
+    const init  = (m.first[0] + m.last[0]).toUpperCase();
+    const boatLabel = m.boat ? `${m.boat}${m.boatSize ? ` (${m.boatSize}ft)` : ''}` : '—';
+    return `<tr>
+      <td><div style="display:flex;align-items:center;gap:10px;">
+        <div class="avatar">${init}</div>
+        <div>
+          <strong>${m.first} ${m.last}</strong>
+          ${addressLine(m)}
+        </div>
+      </div></td>
+      <td>${roleDisplay(m.role)}</td>
+      <td style="white-space:nowrap">${boatLabel}</td>
+      <td>${m.email ? `<a href="mailto:${m.email}" style="color:var(--gold-light)">${m.email}</a>` : '—'}</td>
+      <td>${m.phone || '—'}</td>
+      <td style="white-space:nowrap">${fmtDate(m.joined)}</td>
+      <td><span style="color:${open>0?'#ffd166':'rgba(255,255,255,0.5)'}">${open}</span></td>
+      <td>${hours.toFixed(1)}</td>
+      <td style="white-space:nowrap" class="admin-only">
+        <button class="btn btn-ghost btn-sm" onclick="openEditMember('${m.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteMember('${m.id}')">Remove</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Tasks ──────────────────────────────────────────────────────────────────
+
+function addTask() {
+  const title = document.getElementById('t-title').value.trim();
+  if (!title) { alert('Task title is required.'); return; }
+  const t = {
+    id:       uid(),
+    title,
+    category: document.getElementById('t-category').value,
+    assignee: document.getElementById('t-assignee').value,
+    priority: document.getElementById('t-priority').value,
+    due:      document.getElementById('t-due').value,
+    timeline:  document.getElementById('t-timeline').value.trim(),
+    desc:      document.getElementById('t-desc').value.trim(),
+    noAssign:  document.getElementById('t-noassign').checked,
+    status:   'pending',
+    created:  new Date().toISOString()
+  };
+  tasks.push(t);
+  const who = t.assignee ? memberName(t.assignee) : 'unassigned';
+  pushActivity('📌', `Task added: "${title}" → ${who}`);
+  save(); clearTaskForm(); refreshAll();
+}
+
+function clearTaskForm() {
+  ['t-title','t-due','t-timeline','t-desc'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('t-noassign').checked = false;
+  document.getElementById('t-category').value = '';
+  document.getElementById('t-assignee').value = '';
+  document.getElementById('t-priority').value = 'medium';
+}
+
+function deleteTask(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t || !confirm(`Delete task "${t.title}"?`)) return;
+  tasks = tasks.filter(x => x.id !== id);
+  pushActivity('🗑️', `Deleted task: "${t.title}"`);
+  save(); refreshAll();
+}
+
+function openEdit(id) {
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  document.getElementById('edit-id').value       = id;
+  document.getElementById('edit-title').value    = t.title;
+  document.getElementById('edit-category').value = t.category;
+  document.getElementById('edit-priority').value = t.priority;
+  document.getElementById('edit-status').value   = t.status;
+  document.getElementById('edit-due').value      = t.due;
+  document.getElementById('edit-timeline').value   = t.timeline  || '';
+  document.getElementById('edit-noassign').checked = !!t.noAssign;
+  document.getElementById('edit-desc').value     = t.desc;
+  populateSelect('edit-assignee', true);
+  document.getElementById('edit-assignee').value = t.assignee;
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('edit-modal').classList.remove('open'); }
+
+function saveEdit() {
+  const id = document.getElementById('edit-id').value;
+  const t  = tasks.find(x => x.id === id); if (!t) return;
+  t.title    = document.getElementById('edit-title').value.trim();
+  t.category = document.getElementById('edit-category').value;
+  t.assignee = document.getElementById('edit-assignee').value;
+  t.priority = document.getElementById('edit-priority').value;
+  t.status   = document.getElementById('edit-status').value;
+  t.due      = document.getElementById('edit-due').value;
+  t.timeline  = document.getElementById('edit-timeline').value.trim();
+  t.noAssign  = document.getElementById('edit-noassign').checked;
+  t.desc     = document.getElementById('edit-desc').value.trim();
+  pushActivity('✏️', `Updated task: "${t.title}"`);
+  save(); closeModal(); refreshAll();
+}
+
+function cycleStatus(id) {
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  const order = ['pending','active','done'];
+  t.status = order[(order.indexOf(t.status) + 1) % order.length];
+  pushActivity('🔄', `Task "${t.title}" → ${statusLabel(t.status)}`);
+  save(); refreshAll();
+}
+
+function statusLabel(s) { return {pending:'Pending',active:'In Progress',done:'Done'}[s] || s; }
+function statusBadge(s, due) {
+  if (s !== 'done' && due && due < today()) return `<span class="badge badge-overdue">Overdue</span>`;
+  return `<span class="badge badge-${s}">${statusLabel(s)}</span>`;
+}
+
+function today() { return new Date().toISOString().split('T')[0]; }
+
+function renderTasks() {
+  const q      = document.getElementById('task-search').value.toLowerCase();
+  const fstat  = document.getElementById('filter-status').value;
+  const fmem   = document.getElementById('filter-member').value;
+
+  let filtered = tasks.filter(t =>
+    `${t.title} ${t.category} ${t.desc}`.toLowerCase().includes(q) &&
+    (!fstat || t.status === fstat) &&
+    (!fmem  || t.assignee === fmem)
+  ).sort((a,b) => {
+    const pord = {high:0,medium:1,low:2};
+    return (pord[a.priority]||1) - (pord[b.priority]||1);
+  });
+
+  const tbody = document.getElementById('task-table');
+  const empty = document.getElementById('task-empty');
+
+  if (!filtered.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  const dotClass = {low:'dot-low',medium:'dot-med',high:'dot-high'};
+  tbody.innerHTML = filtered.map(t => `<tr>
+    <td>
+      <strong>${t.title}</strong>
+      ${t.desc ? `<div style="font-size:0.78rem;color:rgba(255,255,255,0.45);margin-top:2px;">${t.desc.slice(0,60)}${t.desc.length>60?'…':''}</div>` : ''}
+    </td>
+    <td>${t.category || '—'}</td>
+    <td>${t.assignee ? memberName(t.assignee) : t.noAssign ? '<span style="color:#c4a8ff">✓ No assign needed</span>' : '<span style="color:rgba(255,255,255,0.35)">Unassigned</span>'}</td>
+    <td><span class="dot ${dotClass[t.priority]||'dot-med'}"></span>${t.priority}</td>
+    <td style="white-space:nowrap;color:rgba(255,255,255,0.6);font-size:0.82rem">${t.timeline || '—'}</td>
+    <td style="white-space:nowrap">${t.due || '—'}</td>
+    <td style="white-space:nowrap" class="admin-only">
+      <button class="btn btn-ghost btn-sm" onclick="cycleStatus('${t.id}')" title="Advance status">▶</button>
+      <button class="btn btn-ghost btn-sm" onclick="openEdit('${t.id}')">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteTask('${t.id}')">Del</button>
+    </td>
+  </tr>`).join('');
+}
+
+// ── Work Log ───────────────────────────────────────────────────────────────
+
+function addLog() {
+  const memberId = document.getElementById('l-member').value;
+  const taskId   = document.getElementById('l-task').value;
+  const hours    = parseFloat(document.getElementById('l-hours').value);
+  const date     = document.getElementById('l-date').value;
+  const title    = document.getElementById('l-title').value.trim();
+  if (!memberId || !hours || !date || !title) { alert('Member, task title, hours, and date are required.'); return; }
+
+  const entry = { id: uid(), memberId, taskId, title, hours, date,
+    timeline: document.getElementById('l-timeline').value.trim(),
+    notes:    document.getElementById('l-notes').value.trim() };
+  workLog.unshift(entry);
+
+  const mn = memberName(memberId);
+  pushActivity('⏱️', `${mn} logged ${hours}h on "${title}"`);
+
+  if (document.getElementById('l-complete').checked && taskId) {
+    const t = tasks.find(x => x.id === taskId);
+    if (t) { t.status = 'done'; pushActivity('✅', `Task completed: "${title}"`); }
+  }
+
+  save();
+  document.getElementById('l-hours').value    = '';
+  document.getElementById('l-title').value    = '';
+  document.getElementById('l-timeline').value = '';
+  document.getElementById('l-notes').value    = '';
+  document.getElementById('l-complete').checked = false;
+  refreshAll();
+}
+
+function deleteLog(id) {
+  workLog = workLog.filter(x => x.id !== id);
+  pushActivity('🗑️', 'Deleted work log entry');
+  save(); refreshAll();
+}
+
+function renderLog() {
+  const q = document.getElementById('log-search').value.toLowerCase();
+  const filtered = workLog.filter(l => {
+    const mn = memberName(l.memberId).toLowerCase();
+    const tn = taskTitle(l.taskId).toLowerCase();
+    return `${mn} ${tn} ${l.notes}`.includes(q);
+  });
+
+  const total = workLog.reduce((s, l) => s + (+l.hours||0), 0);
+  document.getElementById('total-hours-badge').textContent = `Total: ${total.toFixed(1)} hrs`;
+
+  const tbody = document.getElementById('log-table');
+  const empty = document.getElementById('log-empty');
+
+  if (!filtered.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(l => `<tr>
+    <td style="white-space:nowrap">${fmtDate(l.date)}</td>
+    <td>${memberName(l.memberId)}</td>
+    <td>${l.title || '—'}</td>
+    <td style="color:rgba(255,255,255,0.6);font-size:0.82rem;white-space:nowrap">${l.timeline || '—'}</td>
+    <td style="font-size:0.8rem">${linkedTaskCell(l)}</td>
+    <td>${logStatusBadge(l.taskId)}</td>
+    <td><strong style="color:var(--gold-light)">${(+l.hours).toFixed(1)}</strong></td>
+    <td style="color:rgba(255,255,255,0.6)">${l.notes || '—'}</td>
+    <td class="admin-only"><button class="btn btn-danger btn-sm" onclick="deleteLog('${l.id}')">✕</button></td>
+  </tr>`).join('');
+}
+
+// ── Dashboard ──────────────────────────────────────────────────────────────
+
+function renderDashboard() {
+  const open    = tasks.filter(t => t.status !== 'done').length;
+  const done    = tasks.filter(t => t.status === 'done').length;
+  const overdue = tasks.filter(t => t.status !== 'done' && t.due && t.due < today()).length;
+  const totalH  = workLog.reduce((s, l) => s + (+l.hours||0), 0);
+
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat"><div class="stat-num">${members.length}</div><div class="stat-lbl">Members</div></div>
+    <div class="stat"><div class="stat-num">${open}</div><div class="stat-lbl">Open Tasks</div></div>
+    <div class="stat"><div class="stat-num">${done}</div><div class="stat-lbl">Completed</div></div>
+    <div class="stat"><div class="stat-num" style="color:${overdue?'#ff8a8a':'var(--gold)'}">${overdue}</div><div class="stat-lbl">Overdue</div></div>
+    <div class="stat"><div class="stat-num">${totalH.toFixed(1)}</div><div class="stat-lbl">Hours Logged</div></div>
+  `;
+
+  // Activity feed
+  const feed = document.getElementById('activity-feed');
+  if (!activity.length) {
+    feed.innerHTML = '<div class="empty"><div class="icon">📋</div>No activity yet.</div>';
+  } else {
+    feed.innerHTML = activity.slice(0,15).map(a => `
+      <div class="feed-item">
+        <span class="feed-icon">${a.icon}</span>
+        <div><div>${a.text}</div><div class="feed-time">${relTime(a.time)}</div></div>
+      </div>`).join('');
+  }
+
+  // Member task summary
+  const mts = document.getElementById('member-task-summary');
+  if (!members.length) { mts.innerHTML = '<div class="empty"><div class="icon">👥</div>No members added.</div>'; return; }
+  mts.innerHTML = members.map(m => {
+    const open = tasks.filter(t => t.assignee === m.id && t.status !== 'done').length;
+    const total = tasks.filter(t => t.assignee === m.id).length;
+    const pct = total ? Math.round((total - open) / total * 100) : 0;
+    return `<div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span style="font-size:0.875rem;">${m.first} ${m.last}</span>
+        <span style="font-size:0.75rem;color:rgba(255,255,255,0.5);">${open} open / ${total} total</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function memberName(id) {
+  const m = members.find(x => x.id === id);
+  return m ? `${m.first} ${m.last}` : 'Unknown';
+}
+function taskTitle(id) {
+  const t = tasks.find(x => x.id === id);
+  return t ? t.title : 'Unknown Task';
+}
+
+function populateSelect(selectId, withBlank = false) {
+  const el = document.getElementById(selectId);
+  const cur = el.value;
+  el.innerHTML = (withBlank ? '<option value="">— Unassigned —</option>' : '<option value="">— Select Member —</option>') +
+    members.map(m => `<option value="${m.id}">${m.first} ${m.last}</option>`).join('');
+  if (cur) el.value = cur;
+}
+
+function populateTaskSelect(selectId) {
+  const el = document.getElementById(selectId);
+  const cur = el.value;
+  el.innerHTML = '<option value="">— Select Task —</option>' +
+    tasks.map(t => `<option value="${t.id}">${t.title}${t.status === 'done' ? ' ✓' : ''}</option>`).join('');
+  if (cur) el.value = cur;
+}
+
+function populateFilterMember() {
+  const el = document.getElementById('filter-member');
+  const cur = el.value;
+  el.innerHTML = '<option value="">All Members</option>' +
+    members.map(m => `<option value="${m.id}">${m.first} ${m.last}</option>`).join('');
+  if (cur) el.value = cur;
+}
+
+function linkedTaskCell(l) {
+  if (!l.taskId) return '—';
+  const t = tasks.find(x => x.id === l.taskId);
+  if (t) return `<span style="color:rgba(255,255,255,0.5)">${t.title}</span>`;
+  // broken reference
+  return `<span style="color:#ff8a8a">⚠ Missing</span>
+    <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">
+      <select id="relink-${l.id}" style="font-size:0.75rem;padding:2px 6px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:var(--white);">
+        <option value="">— relink —</option>
+        ${tasks.map(t => `<option value="${t.id}">${t.title}</option>`).join('')}
+      </select>
+      <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:2px 8px;" onclick="relinkLog('${l.id}')">Link</button>
+      <button class="btn btn-danger btn-sm" style="font-size:0.72rem;padding:2px 8px;" onclick="clearLogTask('${l.id}')">Clear</button>
+    </div>`;
+}
+
+function relinkLog(logId) {
+  const l = workLog.find(x => x.id === logId); if (!l) return;
+  const sel = document.getElementById('relink-' + logId);
+  if (!sel || !sel.value) { alert('Select a task to link.'); return; }
+  l.taskId = sel.value;
+  pushActivity('🔗', `Re-linked work log entry to "${taskTitle(sel.value)}"`);
+  save(); refreshAll();
+}
+
+function clearLogTask(logId) {
+  const l = workLog.find(x => x.id === logId); if (!l) return;
+  l.taskId = '';
+  pushActivity('🗑️', 'Cleared broken task reference from work log entry');
+  save(); refreshAll();
+}
+
+function logStatusBadge(taskId) {
+  if (!taskId) return '';
+  const t = tasks.find(x => x.id === taskId);
+  if (!t) return '';
+  if (t.status === 'done') return statusBadge('done', t.due);
+  if (t.noAssign || !t.assignee) return '';
+  return statusBadge(t.status, t.due);
+}
+
+function autoFillLogTitle(taskId) {
+  const t = tasks.find(x => x.id === taskId);
+  if (!t) return;
+  const titleField    = document.getElementById('l-title');
+  const timelineField = document.getElementById('l-timeline');
+  if (!titleField.value.trim())    titleField.value    = t.title;
+  if (!timelineField.value.trim()) timelineField.value = t.timeline || '';
+}
+
+function fmtDate(val) {
+  if (!val) return '—';
+  const m = String(val).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[2]}/${m[3]}/${m[1]}` : val;
+}
+
+function relTime(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h/24)}d ago`;
+}
+
+function refreshAll() {
+  populateSelect('t-assignee', true);
+  populateSelect('l-member');
+  populateSelect('edit-assignee', true);
+  populateTaskSelect('l-task');
+  populateFilterMember();
+  populateLoginMemberSelect();
+  renderMembers();
+  renderTasks();
+  renderLog();
+  renderDashboard();
+  renderMeetings();
+  applyPermissions();
+}
+
+// ── Import ─────────────────────────────────────────────────────────────────
+
+let _importRows = [];   // raw array-of-objects from sheet
+let _importCols = [];   // detected column headers
+
+function toDateStr(val) {
+  if (!val && val !== 0) return '';
+  if (val instanceof Date) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  // numeric serial — as a number or a plain numeric string
+  const n = typeof val === 'number' ? val : (String(val).trim().match(/^\d+$/) ? Number(val) : null);
+  if (n !== null) {
+    const d = new Date(Math.round((n - 25569) * 86400 * 1000));
+    return toDateStr(d);
+  }
+  return String(val).trim();
+}
+
+const FIELD_ALIASES = {
+  first:    ['first','firstname','first name','first_name','given name','forename','fname'],
+  last:     ['last','lastname','last name','last_name','surname','family name','lname'],
+  role:     ['role','position','title','rank','post'],
+  email:    ['email','e-mail','email address','mail'],
+  phone:    ['phone','telephone','tel','cell','mobile','phone number'],
+  boat:     ['boat','boat name','vessel','vessel name','sailboat','yacht'],
+  boatSize: ['boat size','boatsize','size','length','loa','boat length','vessel size','ft','feet'],
+  joined:   ['joined','date joined','member since','join date','membership date','start date'],
+  address:  ['address','street','street address','home address','mailing address','addr'],
+  city:     ['city','town','municipality'],
+  state:    ['state','province','st'],
+  zip:      ['zip','zip code','zipcode','postal','postal code'],
+};
+
+function bestGuess(cols) {
+  const map = {};
+  for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
+    for (const col of cols) {
+      if (aliases.includes(col.toLowerCase().trim())) { map[field] = col; break; }
+    }
+  }
+  return map;
+}
+
+function handleImportFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  document.getElementById('import-filename').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb   = XLSX.read(data, { type: 'array' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '', cellDates: true });
+      if (!rows.length) { alert('The spreadsheet appears to be empty.'); return; }
+      _importRows = rows;
+      _importCols = Object.keys(rows[0]);
+      showImportPreview();
+    } catch (err) {
+      alert('Could not read file: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function showImportPreview() {
+  const preview = document.getElementById('import-preview');
+  const label   = document.getElementById('import-preview-label');
+  const table   = document.getElementById('import-preview-table');
+  const mapDiv  = document.getElementById('import-map');
+
+  const sample  = _importRows.slice(0, 5);
+  label.textContent = `Found ${_importRows.length} row(s) · ${_importCols.length} column(s) · Showing first ${sample.length}`;
+
+  table.innerHTML = `<thead><tr>${_importCols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
+    <tbody>${sample.map(r => `<tr>${_importCols.map(c => `<td>${r[c] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>`;
+
+  // Auto-map and show mapping selects
+  const guess = bestGuess(_importCols);
+  const fields = [
+    { key: 'first',    label: 'First Name *' },
+    { key: 'last',     label: 'Last Name *'  },
+    { key: 'role',     label: 'Role'         },
+    { key: 'email',    label: 'Email'        },
+    { key: 'phone',    label: 'Phone'        },
+    { key: 'boat',     label: 'Boat Name'    },
+    { key: 'boatSize', label: 'Boat Size'    },
+    { key: 'joined',   label: 'Date Joined'  },
+    { key: 'address',  label: 'Street Address' },
+    { key: 'city',     label: 'City'          },
+    { key: 'state',    label: 'State'         },
+    { key: 'zip',      label: 'ZIP'           },
+  ];
+  document.getElementById('import-map-selects').innerHTML = fields.map(f => `
+    <div>
+      <label>${f.label}</label>
+      <select id="imap-${f.key}" style="font-size:0.82rem;">
+        <option value="">— skip —</option>
+        ${_importCols.map(c => `<option value="${c}" ${guess[f.key]===c?'selected':''}>${c}</option>`).join('')}
+      </select>
+    </div>`).join('');
+
+  mapDiv.style.display = '';
+  preview.style.display = '';
+  document.getElementById('import-status').textContent = '';
+}
+
+function confirmImport() {
+  const getCol = k => document.getElementById('imap-' + k)?.value || '';
+  const firstCol = getCol('first');
+  const lastCol  = getCol('last');
+  if (!firstCol || !lastCol) { alert('You must map at least First Name and Last Name columns.'); return; }
+
+  let added = 0, skipped = 0;
+  for (const row of _importRows) {
+    const first = String(row[firstCol] ?? '').trim();
+    const last  = String(row[lastCol]  ?? '').trim();
+    if (!first || !last) { skipped++; continue; }
+    // Skip duplicates (same first+last, case-insensitive)
+    const exists = members.some(m =>
+      m.first.toLowerCase() === first.toLowerCase() &&
+      m.last.toLowerCase()  === last.toLowerCase()
+    );
+    if (exists) { skipped++; continue; }
+    members.push({
+      id:       uid(),
+      first,    last,
+      role:     String(row[getCol('role')] ?? '').trim().split(/[,;|]+/).map(s=>s.trim()).filter(Boolean),
+      email:    String(row[getCol('email')]    ?? '').trim(),
+      phone:    String(row[getCol('phone')]    ?? '').trim(),
+      boat:     String(row[getCol('boat')]     ?? '').trim(),
+      boatSize: String(row[getCol('boatSize')] ?? '').trim(),
+      joined:   toDateStr(row[getCol('joined')]),
+      address:  String(row[getCol('address')] ?? '').trim(),
+      city:     String(row[getCol('city')]    ?? '').trim(),
+      state:    String(row[getCol('state')]   ?? '').trim().toUpperCase(),
+      zip:      String(row[getCol('zip')]     ?? '').trim(),
+    });
+    added++;
+  }
+
+  pushActivity('📥', `Imported ${added} member(s) from spreadsheet`);
+  save(); refreshAll();
+
+  const status = document.getElementById('import-status');
+  status.style.color = added ? '#7fffaa' : '#ffd166';
+  status.textContent = `✓ ${added} imported, ${skipped} skipped (duplicates / blank rows)`;
+  document.getElementById('import-file').value = '';
+  document.getElementById('import-filename').textContent = 'No file chosen';
+}
+
+function cancelImport() {
+  document.getElementById('import-preview').style.display = 'none';
+  document.getElementById('import-file').value = '';
+  document.getElementById('import-filename').textContent = 'No file chosen';
+  _importRows = []; _importCols = [];
+}
+
+// ── Multi-select component ─────────────────────────────────────────────────
+
+const ROLES = [
+  'Commodore','Vice Commodore','Rear Commodore','Fleet Captain','Past Commodore',
+  'Dock Master','Treasurer','Secretary','Race Committee','Safety Officer',
+  'Social Chair','Membership Chair','Junior Sailing Director','Harbormaster','Volunteer',
+];
+
+function msCreate(wrapId, placeholder = 'Select roles…') {
+  const wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  wrap.dataset.selected = JSON.stringify([]);
+  wrap.dataset.options  = JSON.stringify([...ROLES]);
+  wrap.innerHTML = _msBuild(wrapId, placeholder, [], [...ROLES]);
+  _msBindEvents(wrapId, placeholder);
+}
+
+function _msBuild(id, placeholder, selected, options) {
+  const tags = selected.map(s =>
+    `<span class="ms-tag">${s}<span class="ms-tag-x" data-val="${s}" onclick="msRemove('${id}','${s}',event)">×</span></span>`
+  ).join('');
+  const filtered = options.filter(o => !selected.includes(o));
+  const checks = filtered.map(o =>
+    `<label class="ms-option"><input type="checkbox" onchange="msToggle('${id}','${o}',this.checked)" />${o}</label>`
+  ).join('');
+  return `
+    <button type="button" class="ms-trigger" onclick="msToggleDrop('${id}',event)">
+      ${tags || `<span class="ms-placeholder">${placeholder}</span>`}
+    </button>
+    <div class="ms-dropdown" id="${id}-drop">
+      <div class="ms-search"><input type="text" placeholder="Search…" oninput="msFilter('${id}',this.value)" /></div>
+      <div id="${id}-opts">${checks}</div>
+      <div class="ms-add-custom">
+        <input type="text" id="${id}-custom" placeholder="Add custom role…" onkeydown="if(event.key==='Enter'){msAddCustom('${id}');event.preventDefault();}" />
+        <button onclick="msAddCustom('${id}')">Add</button>
+      </div>
+    </div>`;
+}
+
+function _msBindEvents(id) {
+  document.addEventListener('click', e => {
+    const drop = document.getElementById(id + '-drop');
+    if (!drop) return;
+    if (!document.getElementById(id)?.contains(e.target)) {
+      drop.classList.remove('open');
+    }
+  }, true);
+}
+
+function msToggleDrop(id, e) {
+  e.stopPropagation();
+  document.getElementById(id + '-drop').classList.toggle('open');
+}
+
+function msToggle(id, val, checked) {
+  const wrap = document.getElementById(id);
+  const selected = JSON.parse(wrap.dataset.selected);
+  const options  = JSON.parse(wrap.dataset.options);
+  const next = checked ? [...selected, val] : selected.filter(s => s !== val);
+  wrap.dataset.selected = JSON.stringify(next);
+  _msRefresh(id, options, next);
+}
+
+function msRemove(id, val, e) {
+  e.stopPropagation();
+  const wrap = document.getElementById(id);
+  const selected = JSON.parse(wrap.dataset.selected).filter(s => s !== val);
+  const options  = JSON.parse(wrap.dataset.options);
+  wrap.dataset.selected = JSON.stringify(selected);
+  _msRefresh(id, options, selected);
+}
+
+function msAddCustom(id) {
+  const input = document.getElementById(id + '-custom');
+  const val   = input.value.trim();
+  if (!val) return;
+  const wrap    = document.getElementById(id);
+  const options  = JSON.parse(wrap.dataset.options);
+  const selected = JSON.parse(wrap.dataset.selected);
+  if (!options.includes(val)) options.push(val);
+  if (!selected.includes(val)) selected.push(val);
+  wrap.dataset.options  = JSON.stringify(options);
+  wrap.dataset.selected = JSON.stringify(selected);
+  input.value = '';
+  _msRefresh(id, options, selected);
+}
+
+function msFilter(id, q) {
+  const wrap     = document.getElementById(id);
+  const selected = JSON.parse(wrap.dataset.selected);
+  const options  = JSON.parse(wrap.dataset.options);
+  const filtered = options.filter(o => !selected.includes(o) && o.toLowerCase().includes(q.toLowerCase()));
+  document.getElementById(id + '-opts').innerHTML = filtered.map(o =>
+    `<label class="ms-option"><input type="checkbox" onchange="msToggle('${id}','${o}',this.checked)" />${o}</label>`
+  ).join('');
+}
+
+function _msRefresh(id, options, selected) {
+  const wrap = document.getElementById(id);
+  const isOpen = document.getElementById(id + '-drop')?.classList.contains('open');
+  wrap.innerHTML = _msBuild(id, wrap.dataset.placeholder || 'Select roles…', selected, options);
+  if (isOpen) document.getElementById(id + '-drop').classList.add('open');
+}
+
+function msGet(id) {
+  const wrap = document.getElementById(id);
+  return wrap ? JSON.parse(wrap.dataset.selected || '[]') : [];
+}
+
+function msSet(id, values) {
+  const wrap = document.getElementById(id);
+  if (!wrap) return;
+  const existing = JSON.parse(wrap.dataset.options || JSON.stringify(ROLES));
+  const allOpts  = [...new Set([...existing, ...values])];
+  wrap.dataset.options  = JSON.stringify(allOpts);
+  wrap.dataset.selected = JSON.stringify(values);
+  _msRefresh(id, allOpts, values);
+}
+
+function addressLine(m) {
+  const street = m.address || '';
+  const csz = [m.city, m.state ? (m.city ? m.state : m.state) : '', m.zip]
+    .filter(Boolean).join(m.city && m.state ? ', ' : ' ').replace(/,\s*,/g, ',').trim();
+  const full = [street, csz].filter(Boolean).join(', ');
+  return full ? `<div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-top:1px;">${full}</div>` : '';
+}
+
+function roleDisplay(role) {
+  const arr = Array.isArray(role) ? role : (role ? [role] : []);
+  if (!arr.length) return '<span style="color:rgba(255,255,255,0.3)">—</span>';
+  return arr.map(r => `<span class="ms-tag" style="display:inline-flex;">${r}</span>`).join(' ');
+}
+
+// ── Cloud Sync (Supabase) ──────────────────────────────────────────────────
+
+const SB_CFG_KEY = 'hyc_sb_config';
+let   _sbClient  = null;
+let   _sbChannel = null;
+const SB_KEYS    = ['hyc_members','hyc_tasks','hyc_log','hyc_activity','hyc_meetings','hyc_attendance'];
+
+function getSbConfig() {
+  try { return JSON.parse(localStorage.getItem(SB_CFG_KEY)) || null; } catch { return null; }
+}
+
+async function initSupabase(url, key) {
+  try {
+    _sbClient = supabase.createClient(url, key);
+    // Test connection
+    const { error } = await _sbClient.from('app_store').select('key').limit(1);
+    if (error) throw error;
+    _startRealtime();
+    setSyncPill('🟢 Synced', '#7fffaa');
+    return true;
+  } catch (e) {
+    _sbClient = null;
+    setSyncPill('🔴 Sync Error', '#ff8a8a');
+    console.error('Supabase init failed:', e);
+    return false;
+  }
+}
+
+function _startRealtime() {
+  if (_sbChannel) _sbChannel.unsubscribe();
+  _sbChannel = _sbClient
+    .channel('app_store_changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_store' },
+      async payload => {
+        const k = payload.new?.key || payload.old?.key;
+        if (!SB_KEYS.includes(k)) return;
+        await _pullKey(k);
+        setSyncPill('🟢 Synced', '#7fffaa');
+        refreshAll();
+      })
+    .subscribe();
+}
+
+async function _pullKey(k) {
+  if (!_sbClient) return;
+  const { data, error } = await _sbClient.from('app_store').select('value').eq('key', k).single();
+  if (error || !data) return;
+  const v = data.value;
+  if (k === 'hyc_members')    members    = v || [];
+  if (k === 'hyc_tasks')      tasks      = v || [];
+  if (k === 'hyc_log')        workLog    = v || [];
+  if (k === 'hyc_activity')   activity   = v || [];
+  if (k === 'hyc_meetings')   meetings   = v || [];
+  if (k === 'hyc_attendance') attendance = v || [];
+  STORE.save(k, v);
+}
+
+async function loadAllFromSupabase() {
+  if (!_sbClient) return false;
+  setSyncPill('⏳ Loading…', 'rgba(255,255,255,0.5)');
+  const { data, error } = await _sbClient.from('app_store').select('*').in('key', SB_KEYS);
+  if (error) { setSyncPill('🔴 Load Error', '#ff8a8a'); return false; }
+  for (const row of (data || [])) {
+    const v = row.value;
+    if (row.key === 'hyc_members')    members    = v || [];
+    if (row.key === 'hyc_tasks')      tasks      = v || [];
+    if (row.key === 'hyc_log')        workLog    = v || [];
+    if (row.key === 'hyc_activity')   activity   = v || [];
+    if (row.key === 'hyc_meetings')   meetings   = v || [];
+    if (row.key === 'hyc_attendance') attendance = v || [];
+    STORE.save(row.key, v);
+  }
+  setSyncPill('🟢 Synced', '#7fffaa');
+  return true;
+}
+
+function _pushToSupabase(key, value) {
+  if (!_sbClient) return;
+  _sbClient.from('app_store')
+    .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+    .then(({ error }) => {
+      if (error) setSyncPill('⚠ Sync Error', '#ffd166');
+      else setSyncPill('🟢 Synced', '#7fffaa');
+    });
+}
+
+function setSyncPill(text, color) {
+  const el = document.getElementById('sync-pill');
+  if (!el) return;
+  el.style.display = _sbClient ? '' : 'none';
+  el.textContent = text;
+  el.style.color = color;
+  el.style.borderColor = color;
+  el.style.background = 'rgba(0,0,0,0.3)';
+}
+
+async function saveSyncConfig() {
+  const url = document.getElementById('sb-url').value.trim();
+  const key = document.getElementById('sb-key').value.trim();
+  const st  = document.getElementById('sync-status-text');
+  if (!url || !key) { st.style.color='#ff8a8a'; st.textContent='URL and key are required.'; return; }
+  st.style.color='rgba(255,255,255,0.5)'; st.textContent='Connecting…';
+  localStorage.setItem(SB_CFG_KEY, JSON.stringify({ url, key }));
+  const ok = await initSupabase(url, key);
+  if (!ok) { st.style.color='#ff8a8a'; st.textContent='Connection failed. Check your URL and key.'; return; }
+  const loaded = await loadAllFromSupabase();
+  if (loaded) {
+    st.style.color='#7fffaa'; st.textContent='✓ Connected! Data loaded from cloud.';
+    refreshAll();
+  }
+}
+
+function clearSyncConfig() {
+  if (!confirm('Disconnect cloud sync? App will use local storage only.')) return;
+  localStorage.removeItem(SB_CFG_KEY);
+  if (_sbChannel) { _sbChannel.unsubscribe(); _sbChannel = null; }
+  _sbClient = null;
+  setSyncPill('', '');
+  document.getElementById('sync-status-text').textContent = 'Disconnected.';
+  document.getElementById('sb-url').value = '';
+  document.getElementById('sb-key').value = '';
+}
+
+// Patch save() to also push to Supabase
+const _origSave = save;
+function save() {
+  STORE.save('hyc_members',  members);
+  STORE.save('hyc_tasks',    tasks);
+  STORE.save('hyc_log',      workLog);
+  STORE.save('hyc_activity', activity);
+  if (_sbClient) {
+    _pushToSupabase('hyc_members',  members);
+    _pushToSupabase('hyc_tasks',    tasks);
+    _pushToSupabase('hyc_log',      workLog);
+    _pushToSupabase('hyc_activity', activity);
+  }
+}
+
+// ── Meetings ───────────────────────────────────────────────────────────────
+
+let meetings   = STORE.load('hyc_meetings');
+let attendance = STORE.load('hyc_attendance');
+
+function saveMeetings() {
+  STORE.save('hyc_meetings',   meetings);
+  STORE.save('hyc_attendance', attendance);
+  if (_sbClient) {
+    _pushToSupabase('hyc_meetings',   meetings);
+    _pushToSupabase('hyc_attendance', attendance);
+  }
+}
+
+let _activeMeetingId = null;
+
+function createMeeting() {
+  const title = document.getElementById('mtg-title').value.trim();
+  const date  = document.getElementById('mtg-date').value;
+  if (!title || !date) { alert('Title and date are required.'); return; }
+  const m = {
+    id:       uid(),
+    title,
+    date,
+    location: document.getElementById('mtg-location').value.trim(),
+    notes:    document.getElementById('mtg-notes').value.trim(),
+    created:  new Date().toISOString(),
+  };
+  meetings.push(m);
+  pushActivity('📅', `Meeting created: "${title}" on ${fmtDate(date)}`);
+  save(); saveMeetings();
+  ['mtg-title','mtg-date','mtg-location','mtg-notes'].forEach(id => document.getElementById(id).value = '');
+  renderMeetings();
+}
+
+function deleteMeeting(id) {
+  const m = meetings.find(x => x.id === id);
+  if (!m || !confirm(`Delete "${m.title}"? All sign-ins will be removed.`)) return;
+  meetings   = meetings.filter(x => x.id !== id);
+  attendance = attendance.filter(x => x.meetingId !== id);
+  pushActivity('🗑️', `Deleted meeting: "${m.title}"`);
+  save(); saveMeetings(); renderMeetings();
+}
+
+function renderMeetings() {
+  const filter = document.getElementById('mtg-filter')?.value || 'all';
+  const todayStr = today();
+  let list = [...meetings].sort((a,b) => b.date.localeCompare(a.date));
+  if (filter === 'upcoming') list = list.filter(m => m.date >= todayStr);
+  if (filter === 'past')     list = list.filter(m => m.date <  todayStr);
+
+  const el = document.getElementById('meetings-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">📋</div>No meetings found.</div>';
+    return;
+  }
+
+  el.innerHTML = list.map(m => {
+    const count    = attendance.filter(a => a.meetingId === m.id).length;
+    const isPast   = m.date < todayStr;
+    const isToday  = m.date === todayStr;
+    const dateLbl  = isToday ? `<span style="color:#7fffaa;font-weight:600;">Today</span>` : fmtDate(m.date);
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.07);flex-wrap:wrap;">
+      <div style="flex:1;min-width:180px;">
+        <div style="font-weight:600;">${m.title}</div>
+        <div style="font-size:0.78rem;color:rgba(255,255,255,0.45);margin-top:2px;">
+          ${dateLbl}${m.location ? ' · ' + m.location : ''}${m.notes ? ' · ' + m.notes : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+        <span style="font-size:0.82rem;color:${count?'var(--gold-light)':'rgba(255,255,255,0.35)'};">${count} signed in</span>
+        <button class="btn btn-ghost btn-sm" onclick="openAttendance('${m.id}')">
+          ${isPast ? '📋 View' : '✋ Sign In'}
+        </button>
+        <button class="btn btn-danger btn-sm admin-only" onclick="deleteMeeting('${m.id}')">Del</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openAttendance(meetingId) {
+  _activeMeetingId = meetingId;
+  const m = meetings.find(x => x.id === meetingId); if (!m) return;
+
+  document.getElementById('att-modal-title').textContent =  m.title;
+  document.getElementById('att-modal-meta').textContent  =
+    `${fmtDate(m.date)}${m.location ? ' · ' + m.location : ''}`;
+
+  // Show sign-in button for members if not already signed in
+  const alreadySigned = attendance.some(a => a.meetingId === meetingId && a.memberId === session?.memberId);
+  const signinRow = document.getElementById('att-signin-row');
+  const status    = document.getElementById('att-signed-status');
+  if (isMember()) {
+    signinRow.style.display = '';
+    status.textContent = alreadySigned ? '✓ You are signed in' : '';
+    document.querySelector('#att-signin-row .btn').disabled = alreadySigned;
+  } else {
+    signinRow.style.display = 'none';
+  }
+
+  // Admin: populate sign-in dropdown with unsigned members
+  populateAttAddMember(meetingId);
+  renderAttendanceTable(meetingId);
+  document.getElementById('attendance-modal').classList.add('open');
+}
+
+function populateAttAddMember(meetingId) {
+  const signed = new Set(attendance.filter(a => a.meetingId === meetingId).map(a => a.memberId));
+  const el = document.getElementById('att-add-member');
+  el.innerHTML = '<option value="">— Sign in a member —</option>' +
+    members.filter(m => !signed.has(m.id))
+            .map(m => `<option value="${m.id}">${m.first} ${m.last}</option>`).join('');
+}
+
+function renderAttendanceTable(meetingId) {
+  const rows = attendance.filter(a => a.meetingId === meetingId);
+  const tbody = document.getElementById('att-tbody');
+  const empty = document.getElementById('att-empty');
+
+  document.getElementById('att-count').textContent = `${rows.length} member${rows.length !== 1 ? 's' : ''} signed in`;
+
+  if (!rows.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = rows.map(a => {
+    const m    = members.find(x => x.id === a.memberId);
+    const name = m ? `${m.first} ${m.last}` : 'Unknown Member';
+    const role = m ? roleDisplay(m.role) : '';
+    const time = new Date(a.signedInAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+    return `<tr>
+      <td><strong>${name}</strong></td>
+      <td>${role}</td>
+      <td style="white-space:nowrap;color:rgba(255,255,255,0.5);font-size:0.82rem;">${time}</td>
+      <td class="admin-only"><button class="btn btn-danger btn-sm" onclick="removeSignIn('${a.id}')">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function signMyselfIn() {
+  if (!session?.memberId) return;
+  recordSignIn(_activeMeetingId, session.memberId);
+  document.getElementById('att-signed-status').textContent = '✓ You are signed in';
+  document.querySelector('#att-signin-row .btn').disabled = true;
+}
+
+function adminSignIn() {
+  const memberId = document.getElementById('att-add-member').value;
+  if (!memberId) { alert('Select a member.'); return; }
+  recordSignIn(_activeMeetingId, memberId);
+  populateAttAddMember(_activeMeetingId);
+}
+
+function recordSignIn(meetingId, memberId) {
+  if (attendance.some(a => a.meetingId === meetingId && a.memberId === memberId)) return;
+  attendance.push({ id: uid(), meetingId, memberId, signedInAt: new Date().toISOString() });
+  const m  = meetings.find(x => x.id === meetingId);
+  const mb = members.find(x => x.id === memberId);
+  pushActivity('✋', `${mb?.first} ${mb?.last} signed in to "${m?.title}"`);
+  save(); saveMeetings();
+  renderAttendanceTable(meetingId);
+  renderMeetings();
+}
+
+function removeSignIn(attendanceId) {
+  attendance = attendance.filter(x => x.id !== attendanceId);
+  saveMeetings();
+  renderAttendanceTable(_activeMeetingId);
+  populateAttAddMember(_activeMeetingId);
+  renderMeetings();
+}
+
+function closeAttendanceModal() {
+  document.getElementById('attendance-modal').classList.remove('open');
+  _activeMeetingId = null;
+}
+
+function printAttendance() { window.print(); }
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+
+const AUTH_KEY = 'hyc_session';
+const ADMIN_PW_KEY = 'hyc_admin_pw';
+
+function getAdminPw() { return localStorage.getItem(ADMIN_PW_KEY) || 'admin'; }
+
+let session = null;
+try { session = JSON.parse(sessionStorage.getItem(AUTH_KEY)); } catch {}
+
+function isAdmin()  { return session?.role === 'admin'; }
+function isMember() { return session?.role === 'member'; }
+
+function switchLoginTab(tab) {
+  document.getElementById('login-member-panel').style.display = tab === 'member' ? '' : 'none';
+  document.getElementById('login-admin-panel').style.display  = tab === 'admin'  ? '' : 'none';
+  document.querySelectorAll('.login-tab').forEach((b, i) =>
+    b.classList.toggle('active', (i === 0) === (tab === 'member'))
+  );
+  document.getElementById('login-member-error').textContent = '';
+  document.getElementById('login-admin-error').textContent  = '';
+}
+
+function populateLoginMemberSelect() {
+  const sel = document.getElementById('login-member-select');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Choose your name —</option>' +
+    members.map(m => `<option value="${m.id}">${m.first} ${m.last}</option>`).join('');
+}
+
+function loginMember() {
+  const memberId = document.getElementById('login-member-select').value;
+  const pin      = document.getElementById('login-member-pin').value;
+  const err      = document.getElementById('login-member-error');
+  if (!memberId) { err.textContent = 'Please select your name.'; return; }
+  const m = members.find(x => x.id === memberId);
+  if (!m) { err.textContent = 'Member not found.'; return; }
+  if (m.pin && m.pin !== pin) { err.textContent = 'Incorrect PIN.'; return; }
+  startSession({ role: 'member', memberId });
+}
+
+function loginAdmin() {
+  const pw  = document.getElementById('login-admin-pw').value;
+  const err = document.getElementById('login-admin-error');
+  if (pw !== getAdminPw()) { err.textContent = 'Incorrect password.'; return; }
+  startSession({ role: 'admin', memberId: null });
+}
+
+function startSession(s) {
+  session = s;
+  sessionStorage.setItem(AUTH_KEY, JSON.stringify(s));
+  document.getElementById('login-overlay').classList.add('hidden');
+  applyPermissions();
+  refreshAll();
+}
+
+function logout() {
+  session = null;
+  sessionStorage.removeItem(AUTH_KEY);
+  document.getElementById('login-admin-pw').value  = '';
+  document.getElementById('login-member-pin').value = '';
+  document.getElementById('login-member-error').textContent = '';
+  document.getElementById('login-admin-error').textContent  = '';
+  document.getElementById('login-overlay').classList.remove('hidden');
+  applyPermissions();
+}
+
+function applyPermissions() {
+  const admin = isAdmin();
+  document.body.classList.toggle('member-mode', !admin);
+
+  const chip = document.getElementById('user-chip');
+  if (session) {
+    chip.style.display = '';
+    if (admin) {
+      document.getElementById('user-avatar').textContent = '⚙';
+      document.getElementById('user-name').textContent   = 'Admin';
+      document.getElementById('user-role-lbl').textContent = 'Administrator';
+    } else {
+      const m = members.find(x => x.id === session.memberId);
+      const initials = m ? (m.first[0] + m.last[0]).toUpperCase() : '?';
+      document.getElementById('user-avatar').textContent   = initials;
+      document.getElementById('user-name').textContent     = m ? `${m.first} ${m.last}` : 'Member';
+      document.getElementById('user-role-lbl').textContent = 'Member';
+    }
+  } else {
+    chip.style.display = 'none';
+  }
+
+  // Lock member select in work log to logged-in member
+  const lMember = document.getElementById('l-member');
+  if (lMember) {
+    lMember.disabled = isMember();
+    if (isMember() && session?.memberId) lMember.value = session.memberId;
+  }
+}
+
+function changeAdminPassword() {
+  const np  = document.getElementById('admin-new-pw').value;
+  const cp  = document.getElementById('admin-confirm-pw').value;
+  const st  = document.getElementById('admin-pw-status');
+  if (!np) { st.style.color = '#ff8a8a'; st.textContent = 'Password cannot be blank.'; return; }
+  if (np !== cp) { st.style.color = '#ff8a8a'; st.textContent = 'Passwords do not match.'; return; }
+  localStorage.setItem(ADMIN_PW_KEY, np);
+  document.getElementById('admin-new-pw').value     = '';
+  document.getElementById('admin-confirm-pw').value = '';
+  st.style.color = '#7fffaa'; st.textContent = '✓ Password updated.';
+  setTimeout(() => { st.textContent = ''; }, 3000);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+
+// Fix any numeric date serials stored in existing member records
+members.forEach(m => { if (m.joined) m.joined = toDateStr(m.joined); });
+save();
+
+document.getElementById('l-date').value   = today();
+document.getElementById('mtg-date').value = today();
+msCreate('ms-m-role');
+msCreate('ms-em-role');
+
+// Auto-connect Supabase if credentials saved
+(async () => {
+  const cfg = getSbConfig();
+  if (cfg?.url && cfg?.key) {
+    document.getElementById('sb-url').value = cfg.url;
+    document.getElementById('sb-key').value = cfg.key;
+    const ok = await initSupabase(cfg.url, cfg.key);
+    if (ok) {
+      await loadAllFromSupabase();
+      members.forEach(m => { if (m.joined) m.joined = toDateStr(m.joined); });
+    }
+  }
+
+  // Show login overlay if no active session
+  if (!session) {
+    document.getElementById('login-overlay').classList.remove('hidden');
+  } else {
+    document.getElementById('login-overlay').classList.add('hidden');
+  }
+  applyPermissions();
+  refreshAll();
+})();
+// (synchronous refreshAll below is replaced by the async IIFE above)
+
+// Seed demo data if empty
+if (!members.length && !tasks.length) {
+  const m1 = { id: uid(), first: 'Tom',   last: 'Harrington', role: 'Commodore',      email: 'tom@hyc.org',   phone: '' };
+  const m2 = { id: uid(), first: 'Susan', last: 'Kowalski',   role: 'Fleet Captain',  email: 'susan@hyc.org', phone: '' };
+  const m3 = { id: uid(), first: 'Dave',  last: 'Morales',    role: 'Dock Master',    email: 'dave@hyc.org',  phone: '' };
+  members.push(m1, m2, m3);
+
+  tasks.push(
+    { id: uid(), title: 'Inspect dock cleats & hardware',  category: 'Dock & Marina',     assignee: m3.id, priority: 'high',   due: '', status: 'active',  created: new Date().toISOString(), desc: '' },
+    { id: uid(), title: 'Repaint clubhouse trim',          category: 'Clubhouse',         assignee: m2.id, priority: 'medium', due: '', status: 'pending', created: new Date().toISOString(), desc: '' },
+    { id: uid(), title: 'Check life ring stations',        category: 'Safety & Equipment',assignee: m1.id, priority: 'high',   due: '', status: 'pending', created: new Date().toISOString(), desc: '' },
+    { id: uid(), title: 'Mow & edge club grounds',         category: 'Grounds & Landscaping', assignee: m3.id, priority: 'low', due: '', status: 'done',  created: new Date().toISOString(), desc: '' }
+  );
+
+  pushActivity('🚢', 'Hackensack Yacht Club Work Tracker initialized');
+  save();
+}
+
+// refreshAll() is called inside the async IIFE above after Supabase loads
+</script>
+</body>
+</html>
