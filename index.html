@@ -353,6 +353,7 @@
     <div class="logo" style="width:52px;height:52px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;">⚓</div>
     <h2>Hackensack Yacht Club</h2>
     <p>Work Tracker — Please sign in</p>
+    <div style="text-align:center;margin-bottom:4px;" id="login-sync-status"></div>
     <div class="login-tabs">
       <button class="login-tab active" onclick="switchLoginTab('member')">Member</button>
       <button class="login-tab" onclick="switchLoginTab('admin')">Admin</button>
@@ -566,8 +567,19 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
       </div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <button class="btn btn-primary btn-sm" onclick="saveSyncConfig()">Connect &amp; Sync</button>
+        <button class="btn btn-ghost btn-sm" onclick="embedSyncConfig()">🔗 Embed in App</button>
         <button class="btn btn-ghost btn-sm" onclick="clearSyncConfig()">Disconnect</button>
         <span id="sync-status-text" style="font-size:0.82rem;"></span>
+      </div>
+      <div id="embed-instructions" style="display:none;margin-top:14px;background:rgba(0,0,0,0.3);border-radius:6px;padding:14px;">
+        <p style="font-size:0.82rem;color:var(--gold-light);margin-bottom:8px;">
+          📋 Copy these two lines and paste them into <code style="color:#7fffaa;">index.html</code>
+          replacing the blank <code style="color:#7fffaa;">SUPABASE_URL</code> and <code style="color:#7fffaa;">SUPABASE_KEY</code> lines near the top of the script, then redeploy.
+          After that, <strong>every visitor auto-connects</strong> with no setup.
+        </p>
+        <pre id="embed-snippet" style="font-size:0.78rem;color:#7fffaa;white-space:pre-wrap;word-break:break-all;margin-bottom:10px;"></pre>
+        <button class="btn btn-ghost btn-sm" onclick="copyEmbedSnippet()">📋 Copy to Clipboard</button>
+        <span id="embed-copy-status" style="font-size:0.8rem;margin-left:8px;"></span>
       </div>
     </div>
 
@@ -949,6 +961,13 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
 </div>
 
 <script>
+// ── Supabase Config ────────────────────────────────────────────────────────
+// Fill these in once (Admin Settings → Cloud Sync → Embed in App) and redeploy.
+// All users will then auto-connect without any setup.
+const SUPABASE_URL = 'https://qnvcaixnuudzglpjuyyn.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFudmNhaXhudXVkemdscGp1eXluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxNTcwNjIsImV4cCI6MjA5NTczMzA2Mn0.1w8Imps5pxDTyKf5Ju4H0pDvZfDEhM6T5Lv_a3F_RiA';
+// ───────────────────────────────────────────────────────────────────────────
+
 // ── State ──────────────────────────────────────────────────────────────────
 
 const STORE = {
@@ -1858,13 +1877,22 @@ function _pushToSupabase(key, value) {
 }
 
 function setSyncPill(text, color) {
+  // Header pill
   const el = document.getElementById('sync-pill');
-  if (!el) return;
-  el.style.display = _sbClient ? '' : 'none';
-  el.textContent = text;
-  el.style.color = color;
-  el.style.borderColor = color;
-  el.style.background = 'rgba(0,0,0,0.3)';
+  if (el) {
+    el.style.display = (text ? '' : 'none');
+    el.textContent = text;
+    el.style.color = color;
+    el.style.borderColor = color;
+    el.style.background = 'rgba(0,0,0,0.3)';
+  }
+  // Login overlay status
+  const ls = document.getElementById('login-sync-status');
+  if (ls) {
+    ls.style.color = color;
+    ls.style.fontSize = '0.78rem';
+    ls.textContent = text ? `Cloud sync: ${text}` : '';
+  }
 }
 
 async function saveSyncConfig() {
@@ -1881,6 +1909,25 @@ async function saveSyncConfig() {
     st.style.color='#7fffaa'; st.textContent='✓ Connected! Data loaded from cloud.';
     refreshAll();
   }
+}
+
+function embedSyncConfig() {
+  const url = document.getElementById('sb-url').value.trim();
+  const key = document.getElementById('sb-key').value.trim();
+  if (!url || !key) { alert('Connect & Sync first so the credentials are filled in.'); return; }
+  const snippet = `const SUPABASE_URL = '${url}';\nconst SUPABASE_KEY = '${key}';`;
+  document.getElementById('embed-snippet').textContent = snippet;
+  document.getElementById('embed-instructions').style.display = '';
+  document.getElementById('embed-copy-status').textContent = '';
+}
+
+function copyEmbedSnippet() {
+  const text = document.getElementById('embed-snippet').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const st = document.getElementById('embed-copy-status');
+    st.style.color = '#7fffaa'; st.textContent = '✓ Copied!';
+    setTimeout(() => { st.textContent = ''; }, 2500);
+  });
 }
 
 function clearSyncConfig() {
@@ -2209,16 +2256,33 @@ document.getElementById('mtg-date').value = today();
 msCreate('ms-m-role');
 msCreate('ms-em-role');
 
-// Auto-connect Supabase if credentials saved
+// Auto-connect Supabase if credentials saved, then boot the app
 (async () => {
-  const cfg = getSbConfig();
+  // Hardcoded constants take priority; fall back to localStorage
+  const cfg = (SUPABASE_URL && SUPABASE_KEY)
+    ? { url: SUPABASE_URL, key: SUPABASE_KEY }
+    : getSbConfig();
+
   if (cfg?.url && cfg?.key) {
-    document.getElementById('sb-url').value = cfg.url;
-    document.getElementById('sb-key').value = cfg.key;
-    const ok = await initSupabase(cfg.url, cfg.key);
-    if (ok) {
-      await loadAllFromSupabase();
-      members.forEach(m => { if (m.joined) m.joined = toDateStr(m.joined); });
+    // Pre-fill admin settings form
+    const urlEl = document.getElementById('sb-url');
+    const keyEl = document.getElementById('sb-key');
+    if (urlEl) urlEl.value = cfg.url;
+    if (keyEl) keyEl.value = cfg.key;
+
+    // Show connecting state immediately
+    setSyncPill('⏳ Connecting…', 'rgba(255,255,255,0.5)');
+
+    try {
+      if (typeof supabase === 'undefined') throw new Error('Supabase SDK not loaded');
+      const ok = await initSupabase(cfg.url, cfg.key);
+      if (ok) {
+        await loadAllFromSupabase();
+        members.forEach(m => { if (m.joined) m.joined = toDateStr(m.joined); });
+      }
+    } catch (e) {
+      console.error('Auto-connect failed:', e);
+      setSyncPill('🔴 Offline', '#ff8a8a');
     }
   }
 
@@ -2231,7 +2295,6 @@ msCreate('ms-em-role');
   applyPermissions();
   refreshAll();
 })();
-// (synchronous refreshAll below is replaced by the async IIFE above)
 
 // Seed demo data if empty
 if (!members.length && !tasks.length) {
