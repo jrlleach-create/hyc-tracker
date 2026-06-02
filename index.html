@@ -862,6 +862,31 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
   </div>
 </div>
 
+<!-- Edit Work Log Modal -->
+<div class="modal-bg" id="edit-log-modal">
+  <div class="modal">
+    <h3>Edit Work Log Entry</h3>
+    <input type="hidden" id="el-id" />
+    <div class="form-row three">
+      <div><label>Member</label><select id="el-member" class="admin-only-field"></select></div>
+      <div><label>Task Title *</label><input id="el-title" type="text" /></div>
+      <div><label>Hours *</label><input id="el-hours" type="number" min="0.25" step="0.25" /></div>
+    </div>
+    <div class="form-row three">
+      <div><label>Task</label><select id="el-task"></select></div>
+      <div><label>Timeline</label><input id="el-timeline" type="text" /></div>
+      <div><label>Date *</label><input id="el-date" type="date" /></div>
+    </div>
+    <div class="form-row single">
+      <div><label>Notes</label><input id="el-notes" type="text" /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeEditLog()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditLog()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Edit Task Modal -->
 <div class="modal-bg" id="edit-modal">
   <div class="modal">
@@ -985,6 +1010,12 @@ function save() {
   STORE.save('hyc_tasks',    tasks);
   STORE.save('hyc_log',      workLog);
   STORE.save('hyc_activity', activity);
+  if (_sbClient) {
+    _pushToSupabase('hyc_members',  members);
+    _pushToSupabase('hyc_tasks',    tasks);
+    _pushToSupabase('hyc_log',      workLog);
+    _pushToSupabase('hyc_activity', activity);
+  }
 }
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
@@ -1298,7 +1329,53 @@ function addLog() {
   refreshAll();
 }
 
+function canEditLog(l) {
+  return isAdmin() || (isMember() && l.memberId === session?.memberId);
+}
+
+function openEditLog(id) {
+  const l = workLog.find(x => x.id === id); if (!l) return;
+  document.getElementById('el-id').value       = id;
+  document.getElementById('el-title').value    = l.title    || '';
+  document.getElementById('el-hours').value    = l.hours    || '';
+  document.getElementById('el-timeline').value = l.timeline || '';
+  document.getElementById('el-date').value     = l.date     || '';
+  document.getElementById('el-notes').value    = l.notes    || '';
+  populateSelect('el-member', false);
+  document.getElementById('el-member').value = l.memberId || '';
+  // Lock member field for non-admins
+  document.getElementById('el-member').disabled = !isAdmin();
+  populateTaskSelect('el-task');
+  document.getElementById('el-task').value = l.taskId || '';
+  document.getElementById('edit-log-modal').classList.add('open');
+}
+
+function closeEditLog() {
+  document.getElementById('edit-log-modal').classList.remove('open');
+}
+
+function saveEditLog() {
+  const id = document.getElementById('el-id').value;
+  const l  = workLog.find(x => x.id === id); if (!l) return;
+  if (!canEditLog(l)) return;
+  const title = document.getElementById('el-title').value.trim();
+  const hours = parseFloat(document.getElementById('el-hours').value);
+  const date  = document.getElementById('el-date').value;
+  if (!title || !hours || !date) { alert('Task title, hours, and date are required.'); return; }
+  if (isAdmin()) l.memberId = document.getElementById('el-member').value;
+  l.title    = title;
+  l.hours    = hours;
+  l.date     = date;
+  l.timeline = document.getElementById('el-timeline').value.trim();
+  l.taskId   = document.getElementById('el-task').value;
+  l.notes    = document.getElementById('el-notes').value.trim();
+  pushActivity('✏️', `Updated work log: "${title}"`);
+  save(); closeEditLog(); refreshAll();
+}
+
 function deleteLog(id) {
+  const l = workLog.find(x => x.id === id);
+  if (!l || !canEditLog(l)) return;
   workLog = workLog.filter(x => x.id !== id);
   pushActivity('🗑️', 'Deleted work log entry');
   save(); refreshAll();
@@ -1330,7 +1407,9 @@ function renderLog() {
     <td>${logStatusBadge(l.taskId)}</td>
     <td><strong style="color:var(--gold-light)">${(+l.hours).toFixed(1)}</strong></td>
     <td style="color:rgba(255,255,255,0.6)">${l.notes || '—'}</td>
-    <td class="admin-only"><button class="btn btn-danger btn-sm" onclick="deleteLog('${l.id}')">✕</button></td>
+    <td>${canEditLog(l) ? `
+      <button class="btn btn-ghost btn-sm" onclick="openEditLog('${l.id}')">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteLog('${l.id}')">✕</button>` : ''}</td>
   </tr>`).join('');
 }
 
@@ -1849,19 +1928,40 @@ async function _pullKey(k) {
 
 async function loadAllFromSupabase() {
   if (!_sbClient) return false;
-  setSyncPill('⏳ Loading…', 'rgba(255,255,255,0.5)');
+  setSyncPill('⏳ Syncing…', 'rgba(255,255,255,0.5)');
   const { data, error } = await _sbClient.from('app_store').select('*').in('key', SB_KEYS);
   if (error) { setSyncPill('🔴 Load Error', '#ff8a8a'); return false; }
+
+  const cloudKeys = new Set((data || []).map(r => r.key));
+
+  // For each key: if cloud has data → use cloud; if cloud missing key → push local up
   for (const row of (data || [])) {
     const v = row.value;
-    if (row.key === 'hyc_members')    members    = v || [];
-    if (row.key === 'hyc_tasks')      tasks      = v || [];
-    if (row.key === 'hyc_log')        workLog    = v || [];
-    if (row.key === 'hyc_activity')   activity   = v || [];
-    if (row.key === 'hyc_meetings')   meetings   = v || [];
-    if (row.key === 'hyc_attendance') attendance = v || [];
-    STORE.save(row.key, v);
+    // Only override local data if the cloud actually has records
+    if (!Array.isArray(v) || v.length === 0) continue;
+    if (row.key === 'hyc_members')    members    = v;
+    if (row.key === 'hyc_tasks')      tasks      = v;
+    if (row.key === 'hyc_log')        workLog    = v;
+    if (row.key === 'hyc_activity')   activity   = v;
+    if (row.key === 'hyc_meetings')   meetings   = v;
+    if (row.key === 'hyc_attendance') attendance = v;
+    // Always write through to localStorage so next load is instant
+    localStorage.setItem(row.key, JSON.stringify(v));
   }
+
+  // First-time sync: push any local data not yet in Supabase
+  const localSnapshot = {
+    'hyc_members':    members,
+    'hyc_tasks':      tasks,
+    'hyc_log':        workLog,
+    'hyc_activity':   activity,
+    'hyc_meetings':   meetings,
+    'hyc_attendance': attendance,
+  };
+  for (const [key, val] of Object.entries(localSnapshot)) {
+    if (!cloudKeys.has(key) && val.length > 0) _pushToSupabase(key, val);
+  }
+
   setSyncPill('🟢 Synced', '#7fffaa');
   return true;
 }
@@ -1941,20 +2041,7 @@ function clearSyncConfig() {
   document.getElementById('sb-key').value = '';
 }
 
-// Patch save() to also push to Supabase
-const _origSave = save;
-function save() {
-  STORE.save('hyc_members',  members);
-  STORE.save('hyc_tasks',    tasks);
-  STORE.save('hyc_log',      workLog);
-  STORE.save('hyc_activity', activity);
-  if (_sbClient) {
-    _pushToSupabase('hyc_members',  members);
-    _pushToSupabase('hyc_tasks',    tasks);
-    _pushToSupabase('hyc_log',      workLog);
-    _pushToSupabase('hyc_activity', activity);
-  }
-}
+// save() already handles Supabase pushes — defined near the top of the script
 
 // ── Meetings ───────────────────────────────────────────────────────────────
 
