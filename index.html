@@ -2373,35 +2373,27 @@ msCreate('ms-em-role');
     }
   }
 
+  // Seed demo data ONLY if there is no real data (local OR cloud)
+  // AND no Supabase credentials are configured (so we never overwrite cloud data with demo)
+  // This must run AFTER Supabase load so cloud data is already in memory
+  const hasCreds = !!(cfg?.url && cfg?.key);
+  if (!members.length && !tasks.length && !hasCreds) {
+    const m1 = { id: uid(), first: 'Tom',   last: 'Harrington', role: 'Commodore',      email: 'tom@hyc.org',   phone: '' };
+    const m2 = { id: uid(), first: 'Susan', last: 'Kowalski',   role: 'Fleet Captain',  email: 'susan@hyc.org', phone: '' };
+    const m3 = { id: uid(), first: 'Dave',  last: 'Morales',    role: 'Dock Master',    email: 'dave@hyc.org',  phone: '' };
+    members.push(m1, m2, m3);
+
+    tasks.push(
+      { id: uid(), title: 'Inspect dock cleats & hardware',  category: 'Dock & Marina',     assignee: m3.id, priority: 'high',   due: '', status: 'active',  created: new Date().toISOString(), desc: '' },
+      { id: uid(), title: 'Repaint clubhouse trim',          category: 'Clubhouse',         assignee: m2.id, priority: 'medium', due: '', status: 'pending', created: new Date().toISOString(), desc: '' },
+      { id: uid(), title: 'Check life ring stations',        category: 'Safety & Equipment',assignee: m1.id, priority: 'high',   due: '', status: 'pending', created: new Date().toISOString(), desc: '' },
+      { id: uid(), title: 'Mow & edge club grounds',         category: 'Grounds & Landscaping', assignee: m3.id, priority: 'low', due: '', status: 'done',  created: new Date().toISOString(), desc: '' }
+    );
+
+    pushActivity('🚢', 'Hackensack Yacht Club Work Tracker initialized');
+    save();
+  }
+
   // Show login overlay if no active session
   if (!session) {
-    document.getElementById('login-overlay').classList.remove('hidden');
-  } else {
-    document.getElementById('login-overlay').classList.add('hidden');
-  }
-  applyPermissions();
-  refreshAll();
-})();
-
-// Seed demo data if empty
-if (!members.length && !tasks.length) {
-  const m1 = { id: uid(), first: 'Tom',   last: 'Harrington', role: 'Commodore',      email: 'tom@hyc.org',   phone: '' };
-  const m2 = { id: uid(), first: 'Susan', last: 'Kowalski',   role: 'Fleet Captain',  email: 'susan@hyc.org', phone: '' };
-  const m3 = { id: uid(), first: 'Dave',  last: 'Morales',    role: 'Dock Master',    email: 'dave@hyc.org',  phone: '' };
-  members.push(m1, m2, m3);
-
-  tasks.push(
-    { id: uid(), title: 'Inspect dock cleats & hardware',  category: 'Dock & Marina',     assignee: m3.id, priority: 'high',   due: '', status: 'active',  created: new Date().toISOString(), desc: '' },
-    { id: uid(), title: 'Repaint clubhouse trim',          category: 'Clubhouse',         assignee: m2.id, priority: 'medium', due: '', status: 'pending', created: new Date().toISOString(), desc: '' },
-    { id: uid(), title: 'Check life ring stations',        category: 'Safety & Equipment',assignee: m1.id, priority: 'high',   due: '', status: 'pending', created: new Date().toISOString(), desc: '' },
-    { id: uid(), title: 'Mow & edge club grounds',         category: 'Grounds & Landscaping', assignee: m3.id, priority: 'low', due: '', status: 'done',  created: new Date().toISOString(), desc: '' }
-  );
-
-  pushActivity('🚢', 'Hackensack Yacht Club Work Tracker initialized');
-  save();
-}
-
-// refreshAll() is called inside the async IIFE above after Supabase loads
-</script>
-</body>
-</html>
+    documen
