@@ -532,6 +532,31 @@
         <span id="admin-pw-status" style="font-size:0.82rem;"></span>
       </div>
       <hr style="border-color:rgba(255,255,255,0.1);margin:20px 0;" />
+      <h3 style="color:var(--gold-light);font-size:1rem;margin-bottom:6px;">📍 Clubhouse Location</h3>
+      <p style="font-size:0.82rem;color:rgba(255,255,255,0.5);margin-bottom:14px;">
+        Members must be within the radius of these coordinates to sign in to a meeting.
+        Click <strong>Use My Location</strong> while standing at the clubhouse to auto-fill.
+      </p>
+      <div class="form-row three">
+        <div>
+          <label>Latitude</label>
+          <input id="geo-lat" type="number" step="any" placeholder="e.g. 40.895800" />
+        </div>
+        <div>
+          <label>Longitude</label>
+          <input id="geo-lng" type="number" step="any" placeholder="e.g. -74.043200" />
+        </div>
+        <div>
+          <label>Allowed Radius (metres)</label>
+          <input id="geo-radius" type="number" min="10" max="5000" placeholder="200" value="200" />
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="saveGeoConfig()">Save Location</button>
+        <button class="btn btn-ghost btn-sm" onclick="useMyLocation()">📍 Use My Location</button>
+        <span id="geo-status" style="font-size:0.82rem;"></span>
+      </div>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:20px 0;" />
       <h3 style="color:var(--gold-light);font-size:1rem;margin-bottom:14px;">🗂 Task Categories</h3>
       <div id="cat-list" style="margin-bottom:10px;"></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -791,7 +816,7 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
         </div>
         <div>
           <label>Location</label>
-          <input id="mtg-location" type="text" placeholder="e.g. Clubhouse" />
+          <input id="mtg-location" type="text" placeholder="e.g. Clubhouse" value="Clubhouse" />
         </div>
       </div>
       <div class="form-row single">
@@ -1622,6 +1647,16 @@ function relTime(iso) {
 }
 
 function refreshAll() {
+  // Pre-fill geo config fields if saved
+  const geo = getGeoConfig();
+  if (geo) {
+    const latEl = document.getElementById('geo-lat');
+    const lngEl = document.getElementById('geo-lng');
+    const radEl = document.getElementById('geo-radius');
+    if (latEl) latEl.value = geo.lat;
+    if (lngEl) lngEl.value = geo.lng;
+    if (radEl) radEl.value = geo.radius;
+  }
   populateCategorySelects();
   renderCategoryManager();
   populateSelect('t-assignee', true);
@@ -2154,6 +2189,45 @@ function deleteMeeting(id) {
   save(); saveMeetings(); renderMeetings();
 }
 
+// ── Geolocation helpers ────────────────────────────────────────────────────
+const GEO_CFG_KEY = 'hyc_geo_config';
+
+function getGeoConfig() {
+  try { return JSON.parse(localStorage.getItem(GEO_CFG_KEY)) || null; } catch { return null; }
+}
+
+function saveGeoConfig() {
+  const lat    = parseFloat(document.getElementById('geo-lat').value);
+  const lng    = parseFloat(document.getElementById('geo-lng').value);
+  const radius = parseInt(document.getElementById('geo-radius').value, 10) || 200;
+  const st     = document.getElementById('geo-status');
+  if (isNaN(lat) || isNaN(lng)) { st.style.color='#ff8a8a'; st.textContent='Enter valid coordinates.'; return; }
+  localStorage.setItem(GEO_CFG_KEY, JSON.stringify({ lat, lng, radius }));
+  st.style.color = '#7fffaa'; st.textContent = '✓ Saved.';
+  setTimeout(() => { st.textContent = ''; }, 3000);
+}
+
+function useMyLocation() {
+  const st = document.getElementById('geo-status');
+  if (!navigator.geolocation) { st.style.color='#ff8a8a'; st.textContent='Geolocation not supported.'; return; }
+  st.style.color='rgba(255,255,255,0.5)'; st.textContent='Detecting location…';
+  navigator.geolocation.getCurrentPosition(pos => {
+    document.getElementById('geo-lat').value    = pos.coords.latitude.toFixed(6);
+    document.getElementById('geo-lng').value    = pos.coords.longitude.toFixed(6);
+    st.style.color='#7fffaa'; st.textContent=`✓ Got location (±${Math.round(pos.coords.accuracy)}m accuracy). Click Save.`;
+  }, () => { st.style.color='#ff8a8a'; st.textContent='Could not get location. Check browser permissions.'; });
+}
+
+// Haversine distance in metres between two lat/lng points
+function haversineMetres(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
 function renderMeetings() {
   const filter = document.getElementById('mtg-filter')?.value || 'all';
   const todayStr = today();
@@ -2251,9 +2325,60 @@ function renderAttendanceTable(meetingId) {
 
 function signMyselfIn() {
   if (!session?.memberId) return;
+  const statusEl = document.getElementById('att-signed-status');
+  const btn      = document.querySelector('#att-signin-row .btn');
+
+  // Admins bypass geo check
+  if (isAdmin()) {
+    _completeSignIn();
+    return;
+  }
+
+  const geo = getGeoConfig();
+  if (!geo) {
+    // No geo config set — allow sign-in but warn
+    _completeSignIn();
+    return;
+  }
+
+  if (!navigator.geolocation) {
+    statusEl.style.color = '#ff8a8a';
+    statusEl.textContent = '⚠ Location services not available on this device.';
+    return;
+  }
+
+  statusEl.style.color = 'rgba(255,255,255,0.5)';
+  statusEl.textContent = '📍 Checking your location…';
+  btn.disabled = true;
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const dist = haversineMetres(pos.coords.latitude, pos.coords.longitude, geo.lat, geo.lng);
+      if (dist <= geo.radius) {
+        _completeSignIn();
+      } else {
+        statusEl.style.color = '#ff8a8a';
+        statusEl.textContent = `❌ You must be at the clubhouse to sign in (you are ~${Math.round(dist)}m away).`;
+        btn.disabled = false;
+      }
+    },
+    err => {
+      statusEl.style.color = '#ff8a8a';
+      statusEl.textContent = '❌ Location access denied. Enable location permissions and try again.';
+      btn.disabled = false;
+    },
+    { timeout: 10000, maximumAge: 60000, enableHighAccuracy: true }
+  );
+}
+
+function _completeSignIn() {
   recordSignIn(_activeMeetingId, session.memberId);
-  document.getElementById('att-signed-status').textContent = '✓ You are signed in';
-  document.querySelector('#att-signin-row .btn').disabled = true;
+  const statusEl = document.getElementById('att-signed-status');
+  const btn      = document.querySelector('#att-signin-row .btn');
+  statusEl.style.color = '#7fffaa';
+  statusEl.textContent = '✓ You are signed in';
+  btn.disabled = true;
+  renderAttendanceTable(_activeMeetingId);
 }
 
 function adminSignIn() {
