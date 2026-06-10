@@ -42,11 +42,17 @@
     }
 
     .logo {
-      width: 52px; height: 52px;
-      background: var(--gold);
+      width: 56px; height: 56px;
       border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
-      font-size: 26px; flex-shrink: 0;
+      font-size: 28px; flex-shrink: 0;
+      background: var(--gold);
+      overflow: hidden;
+    }
+    .logo img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      border-radius: 50%;
     }
 
     header h1 { font-size: 1.4rem; font-weight: 700; color: var(--white); }
@@ -350,7 +356,7 @@
 <!-- Login Overlay -->
 <div id="login-overlay">
   <div class="login-box">
-    <div class="logo" style="width:52px;height:52px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;">⚓</div>
+    <div class="logo" id="login-logo" style="width:56px;height:56px;margin:0 auto 16px;"><span>⚓</span></div>
     <h2>Hackensack Yacht Club</h2>
     <p>Work Tracker — Please sign in</p>
     <div style="text-align:center;margin-bottom:4px;" id="login-sync-status"></div>
@@ -386,7 +392,7 @@
 </div>
 
 <header>
-  <div class="logo">⚓</div>
+  <div class="logo" id="app-logo"><span>⚓</span></div>
   <div>
     <h1>Hackensack Yacht Club</h1>
     <p>Member Work Tracker</p>
@@ -531,6 +537,28 @@
         <button class="btn btn-primary btn-sm" onclick="changeAdminPassword()">Change Password</button>
         <span id="admin-pw-status" style="font-size:0.82rem;"></span>
       </div>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:20px 0;" />
+      <h3 style="color:var(--gold-light);font-size:1rem;margin-bottom:10px;">🖼 Club Logo</h3>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px;">
+        <div class="logo" id="logo-preview" style="width:64px;height:64px;flex-shrink:0;"><span>⚓</span></div>
+        <div style="flex:1;min-width:220px;">
+          <p style="font-size:0.82rem;color:rgba(255,255,255,0.55);margin-bottom:8px;">
+            <strong style="color:var(--gold-light);">Preferred:</strong> place a file named
+            <code style="color:#7fffaa;">logo.png</code> in the same folder as
+            <code style="color:#7fffaa;">index.html</code> and redeploy — all users see it automatically.
+          </p>
+          <p style="font-size:0.82rem;color:rgba(255,255,255,0.4);margin-bottom:8px;">
+            <strong>Or</strong> upload below to save in this browser only:
+          </p>
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0;">
+            📂 Choose Logo
+            <input type="file" id="logo-file-input" accept="image/*" style="display:none;" onchange="handleLogoUpload(event)" />
+          </label>
+          <span id="logo-filename" style="font-size:0.82rem;color:rgba(255,255,255,0.4);margin-left:10px;"></span>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="removeLogo()" title="Remove stored logo">✕ Remove</button>
+      </div>
+      <span id="logo-status" style="font-size:0.82rem;"></span>
       <hr style="border-color:rgba(255,255,255,0.1);margin:20px 0;" />
       <h3 style="color:var(--gold-light);font-size:1rem;margin-bottom:6px;">📍 Clubhouse Location</h3>
       <p style="font-size:0.82rem;color:rgba(255,255,255,0.5);margin-bottom:14px;">
@@ -1647,6 +1675,7 @@ function relTime(iso) {
 }
 
 function refreshAll() {
+  applyLogo();
   // Pre-fill geo config fields if saved
   const geo = getGeoConfig();
   if (geo) {
@@ -2189,6 +2218,71 @@ function deleteMeeting(id) {
   save(); saveMeetings(); renderMeetings();
 }
 
+// ── Logo helpers ────────────────────────────────────────────────────────────
+const LOGO_KEY  = 'hyc_logo';
+const LOGO_FILE = 'logo.png'; // place this file alongside index.html to use it
+
+function _setLogoSrc(src) {
+  ['app-logo', 'login-logo', 'logo-preview'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (src) {
+      el.innerHTML = `<img src="${src}" alt="Club Logo" />`;
+      el.style.background = 'transparent';
+    } else {
+      el.innerHTML = '<span>⚓</span>';
+      el.style.background = '';
+    }
+  });
+}
+
+function applyLogo() {
+  // 1. Try logo.png hosted alongside index.html
+  const img = new Image();
+  img.onload = () => _setLogoSrc(LOGO_FILE);
+  img.onerror = () => {
+    // 2. Fall back to localStorage upload
+    const dataUrl = localStorage.getItem(LOGO_KEY);
+    _setLogoSrc(dataUrl || null);
+  };
+  img.src = LOGO_FILE + '?_=' + Date.now(); // cache-bust so onerror fires reliably
+}
+
+function handleLogoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const st = document.getElementById('logo-status');
+  const fn = document.getElementById('logo-filename');
+  fn.textContent = file.name;
+  // Warn if file is large
+  if (file.size > 500 * 1024) {
+    st.style.color = '#ffd166';
+    st.textContent = '⚠ Image is large — consider using a smaller file (< 500 KB).';
+  } else {
+    st.textContent = '';
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    localStorage.setItem(LOGO_KEY, e.target.result);
+    applyLogo();
+    st.style.color = '#7fffaa';
+    st.textContent = '✓ Logo saved.';
+    setTimeout(() => { if (st.textContent === '✓ Logo saved.') st.textContent = ''; }, 3000);
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeLogo() {
+  localStorage.removeItem(LOGO_KEY);
+  document.getElementById('logo-file-input').value = '';
+  document.getElementById('logo-filename').textContent = '';
+  applyLogo();
+  const st = document.getElementById('logo-status');
+  st.style.color = 'rgba(255,255,255,0.5)';
+  st.textContent = 'Logo removed.';
+  setTimeout(() => { st.textContent = ''; }, 3000);
+}
+
 // ── Geolocation helpers ────────────────────────────────────────────────────
 const GEO_CFG_KEY = 'hyc_geo_config';
 
@@ -2534,6 +2628,7 @@ document.getElementById('l-date').value   = today();
 document.getElementById('mtg-date').value = today();
 msCreate('ms-m-role');
 msCreate('ms-em-role');
+applyLogo(); // apply immediately so logo shows before async Supabase load
 
 // Auto-connect Supabase if credentials saved, then boot the app
 (async () => {
