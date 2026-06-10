@@ -439,17 +439,7 @@
         </div>
         <div>
           <label>Category</label>
-          <select id="t-category">
-            <option value="">— Select —</option>
-            <option>Dock & Marina</option>
-            <option>Grounds & Landscaping</option>
-            <option>Clubhouse</option>
-            <option>Fleet / Boats</option>
-            <option>Events</option>
-            <option>Safety & Equipment</option>
-            <option>Administration</option>
-            <option>Other</option>
-          </select>
+          <select id="t-category"></select>
         </div>
       </div>
       <div class="form-row three">
@@ -540,6 +530,15 @@
       <div style="display:flex;gap:10px;align-items:center;">
         <button class="btn btn-primary btn-sm" onclick="changeAdminPassword()">Change Password</button>
         <span id="admin-pw-status" style="font-size:0.82rem;"></span>
+      </div>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:20px 0;" />
+      <h3 style="color:var(--gold-light);font-size:1rem;margin-bottom:14px;">🗂 Task Categories</h3>
+      <div id="cat-list" style="margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input id="new-cat-input" type="text" placeholder="New category name"
+          style="flex:1;min-width:160px;"
+          onkeydown="if(event.key==='Enter')addCategory()" />
+        <button class="btn btn-primary btn-sm" onclick="addCategory()">+ Add</button>
       </div>
       <hr style="border-color:rgba(255,255,255,0.1);margin:20px 0;" />
       <h3 style="color:var(--gold-light);font-size:1rem;margin-bottom:14px;">☁ Cloud Sync (Supabase)</h3>
@@ -896,13 +895,7 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
     <div class="form-row">
       <div>
         <label>Category</label>
-        <select id="edit-category">
-          <option value="">— Select —</option>
-          <option>Dock & Marina</option><option>Grounds & Landscaping</option>
-          <option>Clubhouse</option><option>Fleet / Boats</option>
-          <option>Events</option><option>Safety & Equipment</option>
-          <option>Administration</option><option>Other</option>
-        </select>
+        <select id="edit-category"></select>
       </div>
       <div>
         <label>Assign To</label>
@@ -1000,21 +993,28 @@ const STORE = {
   save(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
 };
 
-let members  = STORE.load('hyc_members');
-let tasks    = STORE.load('hyc_tasks');
-let workLog  = STORE.load('hyc_log');
-let activity = STORE.load('hyc_activity');
+let members    = STORE.load('hyc_members');
+let tasks      = STORE.load('hyc_tasks');
+let workLog    = STORE.load('hyc_log');
+let activity   = STORE.load('hyc_activity');
+let categories = STORE.load('hyc_categories');
+if (!categories.length) categories = [
+  'Dock & Marina','Grounds & Landscaping','Clubhouse',
+  'Fleet / Boats','Events','Safety & Equipment','Administration','Other'
+];
 
 function save() {
-  STORE.save('hyc_members',  members);
-  STORE.save('hyc_tasks',    tasks);
-  STORE.save('hyc_log',      workLog);
-  STORE.save('hyc_activity', activity);
+  STORE.save('hyc_members',    members);
+  STORE.save('hyc_tasks',      tasks);
+  STORE.save('hyc_log',        workLog);
+  STORE.save('hyc_activity',   activity);
+  STORE.save('hyc_categories', categories);
   if (_sbClient) {
-    _pushToSupabase('hyc_members',  members);
-    _pushToSupabase('hyc_tasks',    tasks);
-    _pushToSupabase('hyc_log',      workLog);
-    _pushToSupabase('hyc_activity', activity);
+    _pushToSupabase('hyc_members',    members);
+    _pushToSupabase('hyc_tasks',      tasks);
+    _pushToSupabase('hyc_log',        workLog);
+    _pushToSupabase('hyc_activity',   activity);
+    _pushToSupabase('hyc_categories', categories);
   }
 }
 
@@ -1210,9 +1210,9 @@ function deleteTask(id) {
 
 function openEdit(id) {
   const t = tasks.find(x => x.id === id); if (!t) return;
-  document.getElementById('edit-id').value       = id;
-  document.getElementById('edit-title').value    = t.title;
-  document.getElementById('edit-category').value = t.category;
+  document.getElementById('edit-id').value    = id;
+  document.getElementById('edit-title').value = t.title;
+  populateCategorySelects(t.category);
   document.getElementById('edit-priority').value = t.priority;
   document.getElementById('edit-status').value   = t.status;
   document.getElementById('edit-due').value      = t.due;
@@ -1257,6 +1257,68 @@ function statusBadge(s, due) {
 }
 
 function today() { return new Date().toISOString().split('T')[0]; }
+
+// ── Category helpers ───────────────────────────────────────────────────────
+function populateCategorySelects(selectedVal) {
+  ['t-category','edit-category'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cur = selectedVal !== undefined ? selectedVal : el.value;
+    el.innerHTML = '<option value="">— Select —</option>' +
+      categories.map(c => `<option${c === cur ? ' selected' : ''}>${c}</option>`).join('');
+  });
+}
+
+function renderCategoryManager() {
+  const list = document.getElementById('cat-list');
+  if (!list) return;
+  list.innerHTML = categories.map((c, i) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <input type="text" value="${c.replace(/"/g,'&quot;')}" data-ci="${i}"
+        style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
+               border-radius:5px;padding:5px 8px;color:#fff;font-size:0.85rem;"
+        onchange="renameCategory(${i}, this.value)" />
+      <button class="btn btn-danger btn-sm" onclick="deleteCategory(${i})" title="Delete">✕</button>
+    </div>`).join('');
+}
+
+function addCategory() {
+  const inp = document.getElementById('new-cat-input');
+  const name = inp.value.trim();
+  if (!name) return;
+  if (categories.includes(name)) { alert('Category already exists.'); return; }
+  categories.push(name);
+  inp.value = '';
+  save();
+  populateCategorySelects();
+  renderCategoryManager();
+}
+
+function renameCategory(idx, newName) {
+  newName = newName.trim();
+  if (!newName) { renderCategoryManager(); return; }
+  if (categories.includes(newName) && categories[idx] !== newName) {
+    alert('Category already exists.'); renderCategoryManager(); return;
+  }
+  const old = categories[idx];
+  categories[idx] = newName;
+  // Update any tasks using the old name
+  tasks.forEach(t => { if (t.category === old) t.category = newName; });
+  save();
+  populateCategorySelects();
+  renderCategoryManager();
+  renderTasks();
+}
+
+function deleteCategory(idx) {
+  const name = categories[idx];
+  const inUse = tasks.filter(t => t.category === name).length;
+  if (inUse && !confirm(`"${name}" is used by ${inUse} task(s). Delete anyway? Those tasks will have no category.`)) return;
+  categories.splice(idx, 1);
+  save();
+  populateCategorySelects();
+  renderCategoryManager();
+}
 
 function renderTasks() {
   const q      = document.getElementById('task-search').value.toLowerCase();
@@ -1560,6 +1622,8 @@ function relTime(iso) {
 }
 
 function refreshAll() {
+  populateCategorySelects();
+  renderCategoryManager();
   populateSelect('t-assignee', true);
   populateSelect('l-member');
   populateSelect('edit-assignee', true);
@@ -1874,7 +1938,7 @@ function roleDisplay(role) {
 const SB_CFG_KEY = 'hyc_sb_config';
 let   _sbClient  = null;
 let   _sbChannel = null;
-const SB_KEYS    = ['hyc_members','hyc_tasks','hyc_log','hyc_activity','hyc_meetings','hyc_attendance'];
+const SB_KEYS    = ['hyc_members','hyc_tasks','hyc_log','hyc_activity','hyc_meetings','hyc_attendance','hyc_categories'];
 
 function getSbConfig() {
   try { return JSON.parse(localStorage.getItem(SB_CFG_KEY)) || null; } catch { return null; }
@@ -1923,6 +1987,7 @@ async function _pullKey(k) {
   if (k === 'hyc_activity')   activity   = v || [];
   if (k === 'hyc_meetings')   meetings   = v || [];
   if (k === 'hyc_attendance') attendance = v || [];
+  if (k === 'hyc_categories') { if (Array.isArray(v) && v.length) categories = v; }
   STORE.save(k, v);
 }
 
@@ -1945,6 +2010,7 @@ async function loadAllFromSupabase() {
     if (row.key === 'hyc_activity')   activity   = v;
     if (row.key === 'hyc_meetings')   meetings   = v;
     if (row.key === 'hyc_attendance') attendance = v;
+    if (row.key === 'hyc_categories') categories = v;
     // Always write through to localStorage so next load is instant
     localStorage.setItem(row.key, JSON.stringify(v));
   }
@@ -1957,6 +2023,7 @@ async function loadAllFromSupabase() {
     'hyc_activity':   activity,
     'hyc_meetings':   meetings,
     'hyc_attendance': attendance,
+    'hyc_categories': categories,
   };
   for (const [key, val] of Object.entries(localSnapshot)) {
     if (!cloudKeys.has(key) && val.length > 0) _pushToSupabase(key, val);
@@ -2396,4 +2463,15 @@ msCreate('ms-em-role');
 
   // Show login overlay if no active session
   if (!session) {
-    documen
+    document.getElementById('login-overlay').classList.remove('hidden');
+  } else {
+    document.getElementById('login-overlay').classList.add('hidden');
+  }
+  applyPermissions();
+  refreshAll();
+})();
+
+// refreshAll() is called inside the async IIFE above after Supabase loads
+</script>
+</body>
+</html>
