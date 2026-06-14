@@ -906,7 +906,7 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
         </div>
         <div>
           <label>Event <span style="color:rgba(255,255,255,0.4);">(optional)</span></label>
-          <select id="fee-event"></select>
+          <select id="fee-event" onchange="onFeeEventChange()"></select>
         </div>
       </div>
       <div class="form-row single">
@@ -916,6 +916,12 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
         </div>
       </div>
       <button class="btn btn-primary" onclick="addFee()">Record Payment</button>
+    </div>
+
+    <!-- Member balance summary (visible to logged-in members) -->
+    <div class="card" id="fee-balance-card" style="display:none;">
+      <div class="card-header"><h2>My Fee Balance</h2></div>
+      <div id="fee-balance-body"></div>
     </div>
 
     <!-- Fee list -->
@@ -2737,6 +2743,23 @@ function populateFeeSelects() {
   }
 }
 
+function onFeeEventChange() {
+  const eventId = document.getElementById('fee-event').value;
+  if (!eventId) return;
+  const ev = events.find(e => e.id === eventId);
+  if (!ev) return;
+  // Auto-fill fee type from event
+  if (ev.feeType) {
+    const ftEl = document.getElementById('fee-type');
+    if (ftEl) ftEl.value = ev.feeType;
+  }
+  // Auto-fill amount from event cost
+  if (ev.cost) {
+    const amtEl = document.getElementById('fee-amount');
+    if (amtEl && !amtEl.value) amtEl.value = ev.cost.toFixed(2);
+  }
+}
+
 function addFee() {
   const memberId = document.getElementById('fee-member').value;
   const type     = document.getElementById('fee-type').value;
@@ -2757,7 +2780,77 @@ function addFee() {
   save(); populateFeeSelects(); renderFees();
 }
 
+function renderFeeBalance() {
+  const card = document.getElementById('fee-balance-card');
+  const body = document.getElementById('fee-balance-body');
+  if (!card || !body) return;
+
+  // Only show when a member (or admin viewing as member) is logged in
+  if (!session?.memberId) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const mid = session.memberId;
+  const myFees = fees.filter(f => f.memberId === mid);
+
+  // Paid totals by year
+  const byYear = {};
+  myFees.forEach(f => {
+    const y = f.year || '—';
+    byYear[y] = (byYear[y] || 0) + (f.amount || 0);
+  });
+  const totalPaid = myFees.reduce((s, f) => s + (f.amount || 0), 0);
+
+  // Outstanding event fees — events with a cost where member has no payment
+  const outstanding = events.filter(ev => {
+    if (!ev.cost) return false;
+    return !fees.some(f => f.memberId === mid && f.eventId === ev.id);
+  }).sort((a, b) => a.date.localeCompare(b.date));
+
+  const outstandingTotal = outstanding.reduce((s, ev) => s + (ev.cost || 0), 0);
+
+  const yearRows = Object.entries(byYear)
+    .sort((a, b) => String(b[0]).localeCompare(String(a[0])))
+    .map(([y, amt]) => `
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+        <span style="color:rgba(255,255,255,0.6);">${y}</span>
+        <span style="color:var(--gold-light);font-weight:600;">$${amt.toFixed(2)}</span>
+      </div>`).join('');
+
+  const outRows = outstanding.map(ev => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+      <span style="color:rgba(255,255,255,0.7);">🎉 ${ev.title}
+        <span style="font-size:0.78rem;color:rgba(255,255,255,0.35);margin-left:6px;">${fmtDate(ev.date)}</span>
+      </span>
+      <span style="color:#ff8a8a;font-weight:600;">$${ev.cost.toFixed(2)}</span>
+    </div>`).join('');
+
+  body.innerHTML = `
+    <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:18px;">
+      <div style="text-align:center;">
+        <div style="font-size:1.6rem;font-weight:700;color:var(--gold-light);">$${totalPaid.toFixed(2)}</div>
+        <div style="font-size:0.78rem;color:rgba(255,255,255,0.4);">Total Paid</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:1.6rem;font-weight:700;color:${outstandingTotal > 0 ? '#ff8a8a' : '#7fffaa'};">$${outstandingTotal.toFixed(2)}</div>
+        <div style="font-size:0.78rem;color:rgba(255,255,255,0.4);">Outstanding</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:1.6rem;font-weight:700;color:#fff;">${myFees.length}</div>
+        <div style="font-size:0.78rem;color:rgba(255,255,255,0.4);">Payments</div>
+      </div>
+    </div>
+    ${yearRows ? `<div style="margin-bottom:14px;">
+      <div style="font-size:0.8rem;color:var(--gold-light);margin-bottom:6px;font-weight:600;">Paid by Year</div>
+      ${yearRows}
+    </div>` : ''}
+    ${outRows ? `<div>
+      <div style="font-size:0.8rem;color:#ff8a8a;margin-bottom:6px;font-weight:600;">Outstanding Event Fees</div>
+      ${outRows}
+    </div>` : '<div style="font-size:0.85rem;color:#7fffaa;">✓ No outstanding event fees.</div>'}`;
+}
+
 function renderFees() {
+  renderFeeBalance();
   const filterMember = document.getElementById('fee-filter-member')?.value || '';
   const filterType   = document.getElementById('fee-filter-type')?.value   || '';
   const filterYear   = document.getElementById('fee-filter-year')?.value   || '';
