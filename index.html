@@ -929,7 +929,7 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
       <div class="card-header">
         <h2>Fee Payments</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-          <select id="fee-filter-member" onchange="renderFees()" style="font-size:0.8rem;padding:6px 10px;width:auto;">
+          <select id="fee-filter-member" class="admin-only" onchange="renderFees()" style="font-size:0.8rem;padding:6px 10px;width:auto;">
             <option value="">All Members</option>
           </select>
           <select id="fee-filter-type" onchange="renderFees()" style="font-size:0.8rem;padding:6px 10px;width:auto;">
@@ -948,7 +948,7 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
       <div class="table-wrap">
         <table id="fees-table">
           <thead><tr>
-            <th>Member</th>
+            <th class="admin-only">Member</th>
             <th>Fee Type</th>
             <th>Amount</th>
             <th>Date Paid</th>
@@ -3199,7 +3199,7 @@ function renderFees() {
     const ev  = f.eventId ? events.find(e => e.id === f.eventId) : null;
     const name = mb ? `${mb.first} ${mb.last}` : 'Unknown';
     return `<tr>
-      <td><strong>${name}</strong></td>
+      <td class="admin-only"><strong>${name}</strong></td>
       <td>${f.type}</td>
       <td style="color:var(--gold-light);font-weight:600;">$${(f.amount||0).toFixed(2)}</td>
       <td>${fmtDate(f.date)}</td>
