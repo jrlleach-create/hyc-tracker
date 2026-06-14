@@ -1027,7 +1027,7 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
           <input id="ev-desc" type="text" placeholder="Optional details" />
         </div>
       </div>
-      <button class="btn btn-primary" onclick="createEvent()">Create Event</button>
+      <button class="btn btn-primary" onclick="addNewEvent()">Create Event</button>
     </div>
 
     <!-- Event list -->
@@ -2463,7 +2463,7 @@ function populateEventSelect(id, selectedVal) {
     sorted.map(e => `<option value="${e.id}"${e.id===cur?' selected':''}>${e.title} (${fmtDate(e.date)})</option>`).join('');
 }
 
-function createEvent() {
+function addNewEvent() {
   const title    = document.getElementById('ev-title').value.trim();
   const date     = document.getElementById('ev-date').value;
   const type     = document.getElementById('ev-type').value;
