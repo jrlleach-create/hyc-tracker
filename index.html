@@ -1078,31 +1078,55 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
   </div>
 </div>
 
-<!-- Event Fees Modal -->
+<!-- Event Detail Modal (Attendance + Fees) -->
 <div class="modal-bg" id="event-fees-modal">
-  <div class="modal" style="max-width:680px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+  <div class="modal" style="max-width:740px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
       <h3 id="evf-title" style="margin:0;"></h3>
       <button class="btn btn-ghost btn-sm" onclick="closeEventFees()">✕</button>
     </div>
-    <p id="evf-meta" style="font-size:0.82rem;color:rgba(255,255,255,0.45);margin-bottom:4px;"></p>
+    <p id="evf-meta" style="font-size:0.82rem;color:rgba(255,255,255,0.45);margin-bottom:10px;"></p>
     <div id="evf-summary" style="font-size:0.85rem;margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap;"></div>
-    <!-- Admin: record a fee for this event -->
-    <div id="evf-add-row" class="admin-only" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.1);">
-      <div style="flex:1;min-width:140px;"><label style="font-size:0.78rem;">Member</label><select id="evf-member" style="width:100%;"></select></div>
-      <div style="width:100px;"><label style="font-size:0.78rem;">Amount ($)</label><input id="evf-amount" type="number" min="0" step="0.01" style="width:100%;" /></div>
-      <div style="width:130px;"><label style="font-size:0.78rem;">Date Paid</label><input id="evf-date" type="date" style="width:100%;" /></div>
-      <div style="flex:1;min-width:100px;"><label style="font-size:0.78rem;">Notes</label><input id="evf-notes" type="text" style="width:100%;" placeholder="Optional" /></div>
-      <button class="btn btn-primary btn-sm" onclick="addFeeFromEvent()">+ Record</button>
+
+    <!-- Member: sign-in button -->
+    <div id="evf-signin-row" style="display:none;margin-bottom:14px;">
+      <button class="btn btn-primary btn-sm" onclick="signInToEvent()">✋ Sign Me In</button>
+      <span id="evf-signin-status" style="font-size:0.85rem;margin-left:12px;"></span>
     </div>
-    <div class="table-wrap" style="max-height:300px;overflow-y:auto;">
-      <table id="evf-table">
-        <thead><tr><th>Member</th><th>Amount</th><th>Date Paid</th><th>Notes</th><th class="admin-only"></th></tr></thead>
-        <tbody id="evf-tbody"></tbody>
-      </table>
-    </div>
-    <div id="evf-empty" class="empty" style="display:none;padding:20px;">
-      <div class="icon">💰</div>No payments recorded for this event.
+
+    <!-- Two-column layout: Attendance | Fees -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;flex-wrap:wrap;" id="evf-grid">
+
+      <!-- Attendance -->
+      <div>
+        <div style="font-size:0.82rem;font-weight:600;color:var(--gold-light);margin-bottom:8px;">✋ Sign-ins</div>
+        <!-- Admin: sign in anyone -->
+        <div class="admin-only" style="display:flex;gap:6px;margin-bottom:10px;">
+          <select id="evf-attend-member" style="flex:1;font-size:0.82rem;padding:5px 8px;"></select>
+          <button class="btn btn-ghost btn-sm" onclick="adminSignInToEvent()">Sign In</button>
+        </div>
+        <div id="evf-attend-list" style="font-size:0.82rem;"></div>
+      </div>
+
+      <!-- Fees -->
+      <div>
+        <div style="font-size:0.82rem;font-weight:600;color:var(--gold-light);margin-bottom:8px;">💰 Payments</div>
+        <!-- Admin: record payment -->
+        <div class="admin-only" style="margin-bottom:10px;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+            <select id="evf-member" style="flex:1;font-size:0.82rem;padding:5px 8px;"></select>
+            <input id="evf-amount" type="number" min="0" step="0.01" style="width:80px;font-size:0.82rem;padding:5px 8px;" placeholder="$" />
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <input id="evf-date" type="date" style="flex:1;font-size:0.82rem;padding:5px 8px;" />
+            <input id="evf-notes" type="text" style="flex:1;font-size:0.82rem;padding:5px 8px;" placeholder="Notes" />
+            <button class="btn btn-primary btn-sm" onclick="addFeeFromEvent()">+ Record</button>
+          </div>
+        </div>
+        <div id="evf-fees-list" style="font-size:0.82rem;"></div>
+        <div id="evf-empty" style="display:none;font-size:0.82rem;color:rgba(255,255,255,0.35);padding:8px 0;">No payments yet.</div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1308,7 +1332,8 @@ let activity   = STORE.load('hyc_activity');
 let categories = STORE.load('hyc_categories');
 let fees       = STORE.load('hyc_fees');
 let feeTypes   = STORE.load('hyc_fee_types');
-let events     = STORE.load('hyc_events');
+let events          = STORE.load('hyc_events');
+let eventAttendance = STORE.load('hyc_event_attendance');
 if (!categories.length) categories = [
   'Dock & Marina','Grounds & Landscaping','Clubhouse',
   'Fleet / Boats','Events','Safety & Equipment','Administration','Other'
@@ -1323,7 +1348,8 @@ function save() {
   STORE.save('hyc_categories', categories);
   STORE.save('hyc_fees',       fees);
   STORE.save('hyc_fee_types',  feeTypes);
-  STORE.save('hyc_events',     events);
+  STORE.save('hyc_events',          events);
+  STORE.save('hyc_event_attendance', eventAttendance);
   if (_sbClient) {
     _pushToSupabase('hyc_members',    members);
     _pushToSupabase('hyc_tasks',      tasks);
@@ -1332,7 +1358,8 @@ function save() {
     _pushToSupabase('hyc_categories', categories);
     _pushToSupabase('hyc_fees',       fees);
     _pushToSupabase('hyc_fee_types',  feeTypes);
-    _pushToSupabase('hyc_events',     events);
+    _pushToSupabase('hyc_events',          events);
+    _pushToSupabase('hyc_event_attendance', eventAttendance);
   }
 }
 
@@ -2271,7 +2298,7 @@ function roleDisplay(role) {
 const SB_CFG_KEY = 'hyc_sb_config';
 let   _sbClient  = null;
 let   _sbChannel = null;
-const SB_KEYS    = ['hyc_members','hyc_tasks','hyc_log','hyc_activity','hyc_meetings','hyc_attendance','hyc_categories','hyc_fees','hyc_fee_types','hyc_events'];
+const SB_KEYS    = ['hyc_members','hyc_tasks','hyc_log','hyc_activity','hyc_meetings','hyc_attendance','hyc_categories','hyc_fees','hyc_fee_types','hyc_events','hyc_event_attendance'];
 
 function getSbConfig() {
   try { return JSON.parse(localStorage.getItem(SB_CFG_KEY)) || null; } catch { return null; }
@@ -2323,7 +2350,8 @@ async function _pullKey(k) {
   if (k === 'hyc_categories') { if (Array.isArray(v) && v.length) categories = v; }
   if (k === 'hyc_fees')       fees      = v || [];
   if (k === 'hyc_fee_types')  { if (Array.isArray(v) && v.length) feeTypes = v; }
-  if (k === 'hyc_events')     events    = v || [];
+  if (k === 'hyc_events')            events          = v || [];
+  if (k === 'hyc_event_attendance')  eventAttendance = v || [];
   STORE.save(k, v);
 }
 
@@ -2349,7 +2377,8 @@ async function loadAllFromSupabase() {
     if (row.key === 'hyc_categories') categories = v;
     if (row.key === 'hyc_fees')       fees       = v;
     if (row.key === 'hyc_fee_types')  feeTypes   = v;
-    if (row.key === 'hyc_events')     events     = v;
+    if (row.key === 'hyc_events')            events          = v;
+    if (row.key === 'hyc_event_attendance')  eventAttendance = v;
     // Always write through to localStorage so next load is instant
     localStorage.setItem(row.key, JSON.stringify(v));
   }
@@ -2365,7 +2394,8 @@ async function loadAllFromSupabase() {
     'hyc_categories': categories,
     'hyc_fees':       fees,
     'hyc_fee_types':  feeTypes,
-    'hyc_events':     events,
+    'hyc_events':           events,
+    'hyc_event_attendance': eventAttendance,
   };
   for (const [key, val] of Object.entries(localSnapshot)) {
     if (!cloudKeys.has(key) && val.length > 0) _pushToSupabase(key, val);
@@ -2485,6 +2515,7 @@ function deleteEvent(id) {
   const e = events.find(x => x.id === id);
   if (!e || !confirm(`Delete "${e.title}"? Fee links will be removed.`)) return;
   fees.forEach(f => { if (f.eventId === id) f.eventId = ''; });
+  eventAttendance = eventAttendance.filter(a => a.eventId !== id);
   events = events.filter(x => x.id !== id);
   pushActivity('🗑️', `Deleted event: "${e.title}"`);
   save(); populateFeeSelects(); renderEvents(); renderFees();
@@ -2503,12 +2534,19 @@ function renderEvents() {
     return;
   }
   el.innerHTML = list.map(ev => {
-    const isPast  = ev.date < todayStr;
-    const isToday = ev.date === todayStr;
-    const dateLbl = isToday ? `<span style="color:#7fffaa;font-weight:600;">Today</span>` : fmtDate(ev.date);
+    const isPast    = ev.date < todayStr;
+    const isToday   = ev.date === todayStr;
+    const dateLbl   = isToday ? `<span style="color:#7fffaa;font-weight:600;">Today</span>` : fmtDate(ev.date);
     const collected = fees.filter(f => f.eventId === ev.id).reduce((s,f) => s+(f.amount||0), 0);
     const feeCount  = fees.filter(f => f.eventId === ev.id).length;
+    const attCount  = eventAttendance.filter(a => a.eventId === ev.id).length;
     const hasCost   = ev.cost > 0;
+    const mySignedIn = session?.memberId && eventAttendance.some(a => a.eventId === ev.id && a.memberId === session.memberId);
+    const signInBtn = session && !isAdmin()
+      ? mySignedIn
+        ? `<button class="btn btn-ghost btn-sm" disabled style="opacity:0.5;">✓ Signed In</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="signInToEventCard('${ev.id}', this)">✋ Sign In</button>`
+      : '';
     return `
     <div style="display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.07);flex-wrap:wrap;">
       <div style="flex:1;min-width:200px;">
@@ -2518,16 +2556,15 @@ function renderEvents() {
         <div style="font-size:0.78rem;color:rgba(255,255,255,0.45);margin-top:3px;">
           ${dateLbl}${ev.location ? ' · ' + ev.location : ''}${ev.desc ? ' · ' + ev.desc : ''}
         </div>
-        ${hasCost ? `<div style="font-size:0.8rem;margin-top:4px;color:var(--gold-light);">
-          Fee: <strong>$${ev.cost.toFixed(2)}</strong>${ev.feeType ? ' · ' + ev.feeType : ''}
-          &nbsp;|&nbsp; Collected: <strong>$${collected.toFixed(2)}</strong>
-          <span style="color:rgba(255,255,255,0.35);"> (${feeCount} payment${feeCount!==1?'s':''})</span>
-        </div>` : feeCount ? `<div style="font-size:0.8rem;margin-top:4px;color:rgba(255,255,255,0.4);">
-          ${feeCount} fee record${feeCount!==1?'s':''} · $${collected.toFixed(2)} collected
-        </div>` : ''}
+        <div style="font-size:0.8rem;margin-top:4px;display:flex;gap:14px;flex-wrap:wrap;">
+          <span style="color:rgba(255,255,255,0.45);">✋ ${attCount} attended</span>
+          ${hasCost ? `<span style="color:var(--gold-light);">Fee: <strong>$${ev.cost.toFixed(2)}</strong>${ev.feeType ? ' · '+ev.feeType : ''}</span>
+            <span style="color:rgba(255,255,255,0.45);">Collected: <strong>$${collected.toFixed(2)}</strong> (${feeCount})</span>` : ''}
+        </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
-        <button class="btn btn-ghost btn-sm" onclick="openEventFees('${ev.id}')">💰 Fees</button>
+        ${signInBtn}
+        <button class="btn btn-ghost btn-sm" onclick="openEventFees('${ev.id}')">📋 Detail</button>
         <button class="btn btn-ghost btn-sm admin-only" onclick="openEditEvent('${ev.id}')">Edit</button>
         <button class="btn btn-danger btn-sm admin-only" onclick="deleteEvent('${ev.id}')">✕</button>
       </div>
@@ -2572,17 +2609,108 @@ function openEventFees(eventId) {
   const e = events.find(x => x.id === eventId); if (!e) return;
   document.getElementById('evf-title').textContent = e.title;
   document.getElementById('evf-meta').textContent  =
-    `${fmtDate(e.date)}${e.location ? ' · ' + e.location : ''}${e.type ? ' · ' + e.type : ''}`;
-  // Pre-fill amount from event cost
+    `${fmtDate(e.date)}${e.location ? ' · '+e.location : ''}${e.type ? ' · '+e.type : ''}`;
+  // Pre-fill fee amount from event cost
   const amtEl = document.getElementById('evf-amount');
-  if (amtEl && e.cost) amtEl.value = e.cost.toFixed(2);
-  document.getElementById('evf-date').value = today();
-  // Populate member dropdown
-  const memEl = document.getElementById('evf-member');
-  if (memEl) memEl.innerHTML = '<option value="">— Select —</option>' +
-    members.map(m => `<option value="${m.id}">${m.first} ${m.last}</option>`).join('');
-  renderEventFees(eventId);
+  if (amtEl) amtEl.value = e.cost ? e.cost.toFixed(2) : '';
+  document.getElementById('evf-date').value  = today();
+  document.getElementById('evf-notes').value = '';
+  // Member sign-in row (for logged-in non-admin members)
+  const sinRow    = document.getElementById('evf-signin-row');
+  const sinStatus = document.getElementById('evf-signin-status');
+  if (sinRow) {
+    if (isMember() && !isAdmin() && session?.memberId) {
+      const already = eventAttendance.some(a => a.eventId === eventId && a.memberId === session.memberId);
+      sinRow.style.display = '';
+      sinStatus.style.color = '#7fffaa';
+      sinStatus.textContent = already ? '✓ You are signed in' : '';
+      sinRow.querySelector('button').disabled = already;
+    } else {
+      sinRow.style.display = 'none';
+    }
+  }
+  _refreshEventModal(eventId);
   document.getElementById('event-fees-modal').classList.add('open');
+}
+
+function _refreshEventModal(eventId) {
+  const ev = events.find(x => x.id === eventId); if (!ev) return;
+  const attList  = eventAttendance.filter(a => a.eventId === eventId);
+  const feeList  = fees.filter(f => f.eventId === eventId).sort((a,b) => b.date.localeCompare(a.date));
+  const total    = feeList.reduce((s,f) => s+(f.amount||0), 0);
+  const expected = (ev.cost||0) * attList.length;
+
+  // Summary bar
+  const sumEl = document.getElementById('evf-summary');
+  if (sumEl) {
+    const parts = [
+      `<span style="color:rgba(255,255,255,0.5);">✋ <strong style="color:#fff;">${attList.length}</strong> attended</span>`,
+      `<span style="color:var(--gold-light);">💰 Collected: <strong>$${total.toFixed(2)}</strong></span>`,
+    ];
+    if (ev.cost > 0) parts.push(
+      `<span style="color:rgba(255,255,255,0.45);">Expected: $${expected.toFixed(2)}</span>`,
+      `<span style="color:${total>=expected?'#7fffaa':'#ff8a8a'};">${total>=expected?'✓ Fully paid':'⚠ Balance due: $'+(expected-total).toFixed(2)}</span>`
+    );
+    sumEl.innerHTML = parts.join('');
+  }
+
+  // Admin fee-payment member dropdown — only unsigned-in members
+  const memEl = document.getElementById('evf-member');
+  if (memEl) memEl.innerHTML = '<option value="">— Select member —</option>' +
+    members.map(m => `<option value="${m.id}">${m.first} ${m.last}</option>`).join('');
+
+  // Admin sign-in dropdown — unsigned members only
+  const attMemEl = document.getElementById('evf-attend-member');
+  if (attMemEl) {
+    const signed = new Set(attList.map(a => a.memberId));
+    attMemEl.innerHTML = '<option value="">— Select member —</option>' +
+      members.filter(m => !signed.has(m.id))
+        .map(m => `<option value="${m.id}">${m.first} ${m.last}</option>`).join('');
+  }
+
+  // Attendance list
+  const attDiv = document.getElementById('evf-attend-list');
+  if (attDiv) {
+    if (!attList.length) {
+      attDiv.innerHTML = '<div style="color:rgba(255,255,255,0.35);">No sign-ins yet.</div>';
+    } else {
+      attDiv.innerHTML = attList.map(a => {
+        const mb   = members.find(m => m.id === a.memberId);
+        const paid = fees.some(f => f.eventId === eventId && f.memberId === a.memberId);
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+          <span>${mb ? mb.first+' '+mb.last : 'Unknown'}</span>
+          <span style="font-size:0.78rem;${paid?'color:#7fffaa':'color:#ff8a8a'};">${paid?'✓ Paid':'Unpaid'}</span>
+        </div>
+        <div class="admin-only" style="display:none;">
+          <button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:0.72rem;" onclick="removeEventSignIn('${a.id}','${eventId}')">✕</button>
+        </div>`;
+      }).join('');
+      // Show remove buttons for admins
+      if (isAdmin()) attDiv.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
+    }
+  }
+
+  // Fees list
+  const feesDiv = document.getElementById('evf-fees-list');
+  const emptyEl = document.getElementById('evf-empty');
+  if (feesDiv) {
+    if (!feeList.length) {
+      feesDiv.innerHTML = ''; if (emptyEl) emptyEl.style.display = '';
+    } else {
+      if (emptyEl) emptyEl.style.display = 'none';
+      feesDiv.innerHTML = feeList.map(f => {
+        const mb = members.find(m => m.id === f.memberId);
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);gap:8px;flex-wrap:wrap;">
+          <span>${mb ? mb.first+' '+mb.last : 'Unknown'}</span>
+          <span style="color:var(--gold-light);font-weight:600;">$${(f.amount||0).toFixed(2)}</span>
+          <span style="color:rgba(255,255,255,0.4);font-size:0.78rem;">${fmtDate(f.date)}${f.notes?' · '+f.notes:''}</span>
+          <button class="btn btn-danger btn-sm admin-only" style="padding:2px 7px;font-size:0.72rem;"
+            onclick="deleteFee('${f.id}');_refreshEventModal('${eventId}');renderEvents();renderFees();">✕</button>
+        </div>`;
+      }).join('');
+    }
+  }
+  applyPermissions();
 }
 
 function closeEventFees() {
@@ -2590,39 +2718,81 @@ function closeEventFees() {
   _activeEventId = null;
 }
 
-function renderEventFees(eventId) {
-  const list  = fees.filter(f => f.eventId === eventId).sort((a,b) => b.date.localeCompare(a.date));
-  const tbody = document.getElementById('evf-tbody');
-  const empty = document.getElementById('evf-empty');
-  const table = document.getElementById('evf-table');
-  const sumEl = document.getElementById('evf-summary');
-  const ev    = events.find(x => x.id === eventId);
+// Member sign-in from event card (with GPS check)
+function signInToEventCard(eventId, btn) {
+  if (!session?.memberId) return;
+  const geo = getGeoConfig();
+  if (!geo) { _recordEventSignIn(eventId); renderEvents(); return; }
+  if (!navigator.geolocation) { alert('Location services not available.'); return; }
+  btn.textContent = '📍…'; btn.disabled = true;
+  navigator.geolocation.getCurrentPosition(pos => {
+    const dist = haversineMetres(pos.coords.latitude, pos.coords.longitude, geo.lat, geo.lng);
+    if (dist <= geo.radius) {
+      _recordEventSignIn(eventId);
+      btn.textContent = '✓ Signed In'; btn.style.opacity = '0.5';
+      renderEvents();
+    } else {
+      btn.textContent = '✋ Sign In'; btn.disabled = false;
+      alert(`You must be at the clubhouse to sign in (you are ~${Math.round(dist)}m away).`);
+    }
+  }, () => { btn.textContent = '✋ Sign In'; btn.disabled = false; alert('Location access denied.'); },
+  { timeout: 10000, maximumAge: 60000, enableHighAccuracy: true });
+}
 
-  const total = list.reduce((s,f) => s+(f.amount||0), 0);
-  const expected = (ev?.cost||0) * list.length;
+// Member sign-in from inside the modal
+function signInToEvent() {
+  if (!session?.memberId) return;
+  const statusEl = document.getElementById('evf-signin-status');
+  const btn      = document.querySelector('#evf-signin-row button');
+  const geo = getGeoConfig();
+  if (!geo) { _completeEventSignIn(); return; }
+  if (!navigator.geolocation) { statusEl.style.color='#ff8a8a'; statusEl.textContent='Location not available.'; return; }
+  statusEl.style.color='rgba(255,255,255,0.5)'; statusEl.textContent='📍 Checking location…'; btn.disabled=true;
+  navigator.geolocation.getCurrentPosition(pos => {
+    const dist = haversineMetres(pos.coords.latitude, pos.coords.longitude, geo.lat, geo.lng);
+    if (dist <= geo.radius) { _completeEventSignIn(); }
+    else {
+      statusEl.style.color='#ff8a8a';
+      statusEl.textContent=`❌ Must be at clubhouse (~${Math.round(dist)}m away).`;
+      btn.disabled=false;
+    }
+  }, () => { statusEl.style.color='#ff8a8a'; statusEl.textContent='❌ Location denied.'; btn.disabled=false; },
+  { timeout:10000, maximumAge:60000, enableHighAccuracy:true });
+}
 
-  if (sumEl) {
-    const parts = [`<span style="color:var(--gold-light);">Collected: <strong>$${total.toFixed(2)}</strong></span>`,
-                   `<span style="color:rgba(255,255,255,0.4);">${list.length} payment${list.length!==1?'s':''}</span>`];
-    if (ev?.cost > 0) parts.push(`<span style="color:rgba(255,255,255,0.4);">Expected: $${expected.toFixed(2)}</span>`);
-    sumEl.innerHTML = parts.join('');
-  }
+function _completeEventSignIn() {
+  _recordEventSignIn(_activeEventId);
+  const statusEl = document.getElementById('evf-signin-status');
+  const btn      = document.querySelector('#evf-signin-row button');
+  statusEl.style.color='#7fffaa'; statusEl.textContent='✓ You are signed in';
+  btn.disabled=true;
+  _refreshEventModal(_activeEventId); renderEvents(); renderFees();
+}
 
-  if (!list.length) {
-    tbody.innerHTML = ''; table.style.display = 'none'; empty.style.display = '';
-    return;
-  }
-  table.style.display = ''; empty.style.display = 'none';
-  tbody.innerHTML = list.map(f => {
-    const mb = members.find(m => m.id === f.memberId);
-    return `<tr>
-      <td><strong>${mb ? mb.first+' '+mb.last : 'Unknown'}</strong></td>
-      <td style="color:var(--gold-light);font-weight:600;">$${(f.amount||0).toFixed(2)}</td>
-      <td>${fmtDate(f.date)}</td>
-      <td style="color:rgba(255,255,255,0.5);font-size:0.82rem;">${f.notes||''}</td>
-      <td class="admin-only"><button class="btn btn-danger btn-sm" onclick="deleteFee('${f.id}');renderEventFees('${eventId}');renderEvents();">✕</button></td>
-    </tr>`;
-  }).join('');
+function _recordEventSignIn(eventId) {
+  if (!session?.memberId) return;
+  if (eventAttendance.some(a => a.eventId===eventId && a.memberId===session.memberId)) return;
+  eventAttendance.push({ id:uid(), eventId, memberId:session.memberId, signedInAt:new Date().toISOString() });
+  const ev = events.find(x=>x.id===eventId);
+  const mb = members.find(x=>x.id===session.memberId);
+  pushActivity('✋',`${mb?.first} ${mb?.last} signed in to "${ev?.title}"`);
+  save();
+}
+
+function adminSignInToEvent() {
+  const memberId = document.getElementById('evf-attend-member').value;
+  if (!memberId) { alert('Select a member.'); return; }
+  if (eventAttendance.some(a => a.eventId===_activeEventId && a.memberId===memberId)) return;
+  eventAttendance.push({ id:uid(), eventId:_activeEventId, memberId, signedInAt:new Date().toISOString() });
+  const ev = events.find(x=>x.id===_activeEventId);
+  const mb = members.find(x=>x.id===memberId);
+  pushActivity('✋',`${mb?.first} ${mb?.last} signed in to "${ev?.title}"`);
+  save(); _refreshEventModal(_activeEventId); renderEvents(); renderFees();
+}
+
+function removeEventSignIn(id, eventId) {
+  eventAttendance = eventAttendance.filter(a => a.id !== id);
+  save(); _refreshEventModal(eventId); renderEvents(); renderFees();
 }
 
 function addFeeFromEvent() {
@@ -2633,14 +2803,12 @@ function addFeeFromEvent() {
   const ev       = events.find(x => x.id === _activeEventId);
   if (!memberId || isNaN(amount) || !date) { alert('Member, amount and date are required.'); return; }
   const mb = members.find(m => m.id === memberId);
-  fees.push({
-    id: uid(), memberId, type: ev?.feeType || 'Other', amount, date,
-    year: new Date(date).getFullYear(), notes, eventId: _activeEventId
-  });
-  pushActivity('💰', `Fee recorded: ${mb?.first} ${mb?.last} — ${ev?.title} $${amount.toFixed(2)}`);
+  fees.push({ id:uid(), memberId, type:ev?.feeType||'Other', amount, date,
+    year:new Date(date).getFullYear(), notes, eventId:_activeEventId });
+  pushActivity('💰',`Fee recorded: ${mb?.first} ${mb?.last} — ${ev?.title} $${amount.toFixed(2)}`);
   document.getElementById('evf-member').value = '';
   document.getElementById('evf-notes').value  = '';
-  save(); populateFeeSelects(); renderEventFees(_activeEventId); renderEvents(); renderFees();
+  save(); populateFeeSelects(); _refreshEventModal(_activeEventId); renderEvents(); renderFees();
 }
 
 // ── Fees ───────────────────────────────────────────────────────────────────
@@ -2800,9 +2968,10 @@ function renderFeeBalance() {
   });
   const totalPaid = myFees.reduce((s, f) => s + (f.amount || 0), 0);
 
-  // Outstanding event fees — events with a cost where member has no payment
+  // Outstanding = events member signed in to with a cost but no payment recorded
+  const attended = new Set(eventAttendance.filter(a => a.memberId === mid).map(a => a.eventId));
   const outstanding = events.filter(ev => {
-    if (!ev.cost) return false;
+    if (!ev.cost || !attended.has(ev.id)) return false;
     return !fees.some(f => f.memberId === mid && f.eventId === ev.id);
   }).sort((a, b) => a.date.localeCompare(b.date));
 
