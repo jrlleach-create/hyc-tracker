@@ -412,6 +412,7 @@
   <button onclick="showPanel('log')">Work Log</button>
   <button onclick="showPanel('meetings')">Meetings</button>
   <button onclick="showPanel('fees')">Fees</button>
+  <button onclick="showPanel('events')">Events</button>
 </nav>
 
 <main>
@@ -904,6 +905,12 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
           <input id="fee-year" type="number" min="2000" max="2099" placeholder="e.g. 2025" />
         </div>
         <div>
+          <label>Event <span style="color:rgba(255,255,255,0.4);">(optional)</span></label>
+          <select id="fee-event"></select>
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
           <label>Notes</label>
           <input id="fee-notes" type="text" placeholder="Optional" />
         </div>
@@ -925,6 +932,9 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
           <select id="fee-filter-year" onchange="renderFees()" style="font-size:0.8rem;padding:6px 10px;width:auto;">
             <option value="">All Years</option>
           </select>
+          <select id="fee-filter-event" onchange="renderFees()" style="font-size:0.8rem;padding:6px 10px;width:auto;">
+            <option value="">All Events</option>
+          </select>
           <button class="btn btn-ghost btn-sm admin-only" onclick="exportFees()">⬇ Export</button>
         </div>
       </div>
@@ -937,6 +947,7 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
             <th>Amount</th>
             <th>Date Paid</th>
             <th>Year</th>
+            <th>Event</th>
             <th>Notes</th>
             <th class="admin-only"></th>
           </tr></thead>
@@ -962,7 +973,133 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
 
   </div>
 
+  <!-- ── Events ── -->
+  <div id="panel-events" class="panel">
+
+    <!-- Create Event (admin only) -->
+    <div class="card admin-only">
+      <div class="card-header"><h2>Create Event</h2></div>
+      <div class="form-row three">
+        <div>
+          <label>Event Title *</label>
+          <input id="ev-title" type="text" placeholder="e.g. Spring Regatta" />
+        </div>
+        <div>
+          <label>Date *</label>
+          <input id="ev-date" type="date" />
+        </div>
+        <div>
+          <label>Event Type</label>
+          <select id="ev-type">
+            <option value="">— Select —</option>
+            <option>Race</option>
+            <option>Social</option>
+            <option>Regatta</option>
+            <option>Work Party</option>
+            <option>Meeting</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row three">
+        <div>
+          <label>Location</label>
+          <input id="ev-location" type="text" placeholder="e.g. Clubhouse" />
+        </div>
+        <div>
+          <label>Fee Amount ($)</label>
+          <input id="ev-cost" type="number" min="0" step="0.01" placeholder="0.00" />
+        </div>
+        <div>
+          <label>Fee Type</label>
+          <select id="ev-fee-type"></select>
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label>Description</label>
+          <input id="ev-desc" type="text" placeholder="Optional details" />
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="createEvent()">Create Event</button>
+    </div>
+
+    <!-- Event list -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Events</h2>
+        <select id="ev-filter" onchange="renderEvents()" style="width:auto;font-size:0.8rem;padding:6px 10px;">
+          <option value="upcoming">Upcoming &amp; Today</option>
+          <option value="past">Past</option>
+          <option value="all">All</option>
+        </select>
+      </div>
+      <div id="events-list">
+        <div class="empty"><div class="icon">🎉</div>No events yet.</div>
+      </div>
+    </div>
+
+  </div>
+
 </main>
+
+<!-- Edit Event Modal -->
+<div class="modal-bg" id="edit-event-modal">
+  <div class="modal" style="max-width:620px;">
+    <h3>Edit Event</h3>
+    <input type="hidden" id="ee-id" />
+    <div class="form-row three">
+      <div><label>Title</label><input id="ee-title" type="text" /></div>
+      <div><label>Date</label><input id="ee-date" type="date" /></div>
+      <div><label>Type</label>
+        <select id="ee-type">
+          <option value="">— Select —</option>
+          <option>Race</option><option>Social</option><option>Regatta</option>
+          <option>Work Party</option><option>Meeting</option><option>Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row three">
+      <div><label>Location</label><input id="ee-location" type="text" /></div>
+      <div><label>Fee Amount ($)</label><input id="ee-cost" type="number" min="0" step="0.01" /></div>
+      <div><label>Fee Type</label><select id="ee-fee-type"></select></div>
+    </div>
+    <div class="form-row single"><div><label>Description</label><input id="ee-desc" type="text" /></div></div>
+    <div style="display:flex;gap:10px;margin-top:18px;">
+      <button class="btn btn-primary" onclick="saveEditEvent()">Save</button>
+      <button class="btn btn-ghost" onclick="closeEditEvent()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Event Fees Modal -->
+<div class="modal-bg" id="event-fees-modal">
+  <div class="modal" style="max-width:680px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <h3 id="evf-title" style="margin:0;"></h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeEventFees()">✕</button>
+    </div>
+    <p id="evf-meta" style="font-size:0.82rem;color:rgba(255,255,255,0.45);margin-bottom:4px;"></p>
+    <div id="evf-summary" style="font-size:0.85rem;margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap;"></div>
+    <!-- Admin: record a fee for this event -->
+    <div id="evf-add-row" class="admin-only" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.1);">
+      <div style="flex:1;min-width:140px;"><label style="font-size:0.78rem;">Member</label><select id="evf-member" style="width:100%;"></select></div>
+      <div style="width:100px;"><label style="font-size:0.78rem;">Amount ($)</label><input id="evf-amount" type="number" min="0" step="0.01" style="width:100%;" /></div>
+      <div style="width:130px;"><label style="font-size:0.78rem;">Date Paid</label><input id="evf-date" type="date" style="width:100%;" /></div>
+      <div style="flex:1;min-width:100px;"><label style="font-size:0.78rem;">Notes</label><input id="evf-notes" type="text" style="width:100%;" placeholder="Optional" /></div>
+      <button class="btn btn-primary btn-sm" onclick="addFeeFromEvent()">+ Record</button>
+    </div>
+    <div class="table-wrap" style="max-height:300px;overflow-y:auto;">
+      <table id="evf-table">
+        <thead><tr><th>Member</th><th>Amount</th><th>Date Paid</th><th>Notes</th><th class="admin-only"></th></tr></thead>
+        <tbody id="evf-tbody"></tbody>
+      </table>
+    </div>
+    <div id="evf-empty" class="empty" style="display:none;padding:20px;">
+      <div class="icon">💰</div>No payments recorded for this event.
+    </div>
+  </div>
+</div>
 
 <!-- Edit Fee Modal -->
 <div class="modal-bg" id="edit-fee-modal">
@@ -977,8 +1114,9 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
     <div class="form-row three">
       <div><label>Date Paid</label><input id="ef-date" type="date" /></div>
       <div><label>Year</label><input id="ef-year" type="number" min="2000" max="2099" /></div>
-      <div><label>Notes</label><input id="ef-notes" type="text" /></div>
+      <div><label>Event</label><select id="ef-event"></select></div>
     </div>
+    <div class="form-row single"><div><label>Notes</label><input id="ef-notes" type="text" /></div></div>
     <div style="display:flex;gap:10px;margin-top:18px;">
       <button class="btn btn-primary" onclick="saveEditFee()">Save</button>
       <button class="btn btn-ghost" onclick="closeEditFee()">Cancel</button>
@@ -1164,6 +1302,7 @@ let activity   = STORE.load('hyc_activity');
 let categories = STORE.load('hyc_categories');
 let fees       = STORE.load('hyc_fees');
 let feeTypes   = STORE.load('hyc_fee_types');
+let events     = STORE.load('hyc_events');
 if (!categories.length) categories = [
   'Dock & Marina','Grounds & Landscaping','Clubhouse',
   'Fleet / Boats','Events','Safety & Equipment','Administration','Other'
@@ -1178,6 +1317,7 @@ function save() {
   STORE.save('hyc_categories', categories);
   STORE.save('hyc_fees',       fees);
   STORE.save('hyc_fee_types',  feeTypes);
+  STORE.save('hyc_events',     events);
   if (_sbClient) {
     _pushToSupabase('hyc_members',    members);
     _pushToSupabase('hyc_tasks',      tasks);
@@ -1186,6 +1326,7 @@ function save() {
     _pushToSupabase('hyc_categories', categories);
     _pushToSupabase('hyc_fees',       fees);
     _pushToSupabase('hyc_fee_types',  feeTypes);
+    _pushToSupabase('hyc_events',     events);
   }
 }
 
@@ -1809,6 +1950,7 @@ function refreshAll() {
   populateFeeSelects();
   renderFeeTypeManager();
   renderFees();
+  renderEvents();
   populateSelect('t-assignee', true);
   populateSelect('l-member');
   populateSelect('edit-assignee', true);
@@ -2123,7 +2265,7 @@ function roleDisplay(role) {
 const SB_CFG_KEY = 'hyc_sb_config';
 let   _sbClient  = null;
 let   _sbChannel = null;
-const SB_KEYS    = ['hyc_members','hyc_tasks','hyc_log','hyc_activity','hyc_meetings','hyc_attendance','hyc_categories','hyc_fees','hyc_fee_types'];
+const SB_KEYS    = ['hyc_members','hyc_tasks','hyc_log','hyc_activity','hyc_meetings','hyc_attendance','hyc_categories','hyc_fees','hyc_fee_types','hyc_events'];
 
 function getSbConfig() {
   try { return JSON.parse(localStorage.getItem(SB_CFG_KEY)) || null; } catch { return null; }
@@ -2175,6 +2317,7 @@ async function _pullKey(k) {
   if (k === 'hyc_categories') { if (Array.isArray(v) && v.length) categories = v; }
   if (k === 'hyc_fees')       fees      = v || [];
   if (k === 'hyc_fee_types')  { if (Array.isArray(v) && v.length) feeTypes = v; }
+  if (k === 'hyc_events')     events    = v || [];
   STORE.save(k, v);
 }
 
@@ -2200,6 +2343,7 @@ async function loadAllFromSupabase() {
     if (row.key === 'hyc_categories') categories = v;
     if (row.key === 'hyc_fees')       fees       = v;
     if (row.key === 'hyc_fee_types')  feeTypes   = v;
+    if (row.key === 'hyc_events')     events     = v;
     // Always write through to localStorage so next load is instant
     localStorage.setItem(row.key, JSON.stringify(v));
   }
@@ -2215,6 +2359,7 @@ async function loadAllFromSupabase() {
     'hyc_categories': categories,
     'hyc_fees':       fees,
     'hyc_fee_types':  feeTypes,
+    'hyc_events':     events,
   };
   for (const [key, val] of Object.entries(localSnapshot)) {
     if (!cloudKeys.has(key) && val.length > 0) _pushToSupabase(key, val);
@@ -2301,6 +2446,197 @@ function clearSyncConfig() {
 
 // save() already handles Supabase pushes — defined near the top of the script
 
+// ── Events ─────────────────────────────────────────────────────────────────
+
+function populateEventSelect(id, selectedVal) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const cur = selectedVal !== undefined ? selectedVal : el.value;
+  const sorted = [...events].sort((a,b) => b.date.localeCompare(a.date));
+  el.innerHTML = '<option value="">— None —</option>' +
+    sorted.map(e => `<option value="${e.id}"${e.id===cur?' selected':''}>${e.title} (${fmtDate(e.date)})</option>`).join('');
+}
+
+function createEvent() {
+  const title    = document.getElementById('ev-title').value.trim();
+  const date     = document.getElementById('ev-date').value;
+  const type     = document.getElementById('ev-type').value;
+  const location = document.getElementById('ev-location').value.trim();
+  const cost     = parseFloat(document.getElementById('ev-cost').value) || 0;
+  const feeType  = document.getElementById('ev-fee-type').value;
+  const desc     = document.getElementById('ev-desc').value.trim();
+  if (!title || !date) { alert('Title and date are required.'); return; }
+  events.push({ id: uid(), title, date, type, location, cost, feeType, desc });
+  pushActivity('🎉', `Event created: "${title}" on ${fmtDate(date)}`);
+  document.getElementById('ev-title').value    = '';
+  document.getElementById('ev-location').value = '';
+  document.getElementById('ev-cost').value     = '';
+  document.getElementById('ev-desc').value     = '';
+  save(); populateFeeSelects(); renderEvents();
+}
+
+function deleteEvent(id) {
+  const e = events.find(x => x.id === id);
+  if (!e || !confirm(`Delete "${e.title}"? Fee links will be removed.`)) return;
+  fees.forEach(f => { if (f.eventId === id) f.eventId = ''; });
+  events = events.filter(x => x.id !== id);
+  pushActivity('🗑️', `Deleted event: "${e.title}"`);
+  save(); populateFeeSelects(); renderEvents(); renderFees();
+}
+
+function renderEvents() {
+  const filter   = document.getElementById('ev-filter')?.value || 'upcoming';
+  const todayStr = today();
+  let list = [...events].sort((a,b) => a.date.localeCompare(b.date));
+  if (filter === 'upcoming') list = list.filter(e => e.date >= todayStr);
+  if (filter === 'past')     list = list.filter(e => e.date <  todayStr);
+
+  const el = document.getElementById('events-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">🎉</div>No events found.</div>';
+    return;
+  }
+  el.innerHTML = list.map(ev => {
+    const isPast  = ev.date < todayStr;
+    const isToday = ev.date === todayStr;
+    const dateLbl = isToday ? `<span style="color:#7fffaa;font-weight:600;">Today</span>` : fmtDate(ev.date);
+    const collected = fees.filter(f => f.eventId === ev.id).reduce((s,f) => s+(f.amount||0), 0);
+    const feeCount  = fees.filter(f => f.eventId === ev.id).length;
+    const hasCost   = ev.cost > 0;
+    return `
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.07);flex-wrap:wrap;">
+      <div style="flex:1;min-width:200px;">
+        <div style="font-weight:600;font-size:1rem;">${ev.title}
+          ${ev.type ? `<span style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-left:6px;">${ev.type}</span>` : ''}
+        </div>
+        <div style="font-size:0.78rem;color:rgba(255,255,255,0.45);margin-top:3px;">
+          ${dateLbl}${ev.location ? ' · ' + ev.location : ''}${ev.desc ? ' · ' + ev.desc : ''}
+        </div>
+        ${hasCost ? `<div style="font-size:0.8rem;margin-top:4px;color:var(--gold-light);">
+          Fee: <strong>$${ev.cost.toFixed(2)}</strong>${ev.feeType ? ' · ' + ev.feeType : ''}
+          &nbsp;|&nbsp; Collected: <strong>$${collected.toFixed(2)}</strong>
+          <span style="color:rgba(255,255,255,0.35);"> (${feeCount} payment${feeCount!==1?'s':''})</span>
+        </div>` : feeCount ? `<div style="font-size:0.8rem;margin-top:4px;color:rgba(255,255,255,0.4);">
+          ${feeCount} fee record${feeCount!==1?'s':''} · $${collected.toFixed(2)} collected
+        </div>` : ''}
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" onclick="openEventFees('${ev.id}')">💰 Fees</button>
+        <button class="btn btn-ghost btn-sm admin-only" onclick="openEditEvent('${ev.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm admin-only" onclick="deleteEvent('${ev.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openEditEvent(id) {
+  const e = events.find(x => x.id === id); if (!e) return;
+  document.getElementById('ee-id').value       = id;
+  document.getElementById('ee-title').value    = e.title;
+  document.getElementById('ee-date').value     = e.date;
+  document.getElementById('ee-type').value     = e.type || '';
+  document.getElementById('ee-location').value = e.location || '';
+  document.getElementById('ee-cost').value     = e.cost || '';
+  document.getElementById('ee-desc').value     = e.desc || '';
+  populateFeeTypeSelect('ee-fee-type', e.feeType || '');
+  document.getElementById('edit-event-modal').classList.add('open');
+}
+
+function closeEditEvent() {
+  document.getElementById('edit-event-modal').classList.remove('open');
+}
+
+function saveEditEvent() {
+  const id = document.getElementById('ee-id').value;
+  const e  = events.find(x => x.id === id); if (!e) return;
+  e.title    = document.getElementById('ee-title').value.trim();
+  e.date     = document.getElementById('ee-date').value;
+  e.type     = document.getElementById('ee-type').value;
+  e.location = document.getElementById('ee-location').value.trim();
+  e.cost     = parseFloat(document.getElementById('ee-cost').value) || 0;
+  e.feeType  = document.getElementById('ee-fee-type').value;
+  e.desc     = document.getElementById('ee-desc').value.trim();
+  save(); closeEditEvent(); populateFeeSelects(); renderEvents();
+}
+
+let _activeEventId = null;
+
+function openEventFees(eventId) {
+  _activeEventId = eventId;
+  const e = events.find(x => x.id === eventId); if (!e) return;
+  document.getElementById('evf-title').textContent = e.title;
+  document.getElementById('evf-meta').textContent  =
+    `${fmtDate(e.date)}${e.location ? ' · ' + e.location : ''}${e.type ? ' · ' + e.type : ''}`;
+  // Pre-fill amount from event cost
+  const amtEl = document.getElementById('evf-amount');
+  if (amtEl && e.cost) amtEl.value = e.cost.toFixed(2);
+  document.getElementById('evf-date').value = today();
+  // Populate member dropdown
+  const memEl = document.getElementById('evf-member');
+  if (memEl) memEl.innerHTML = '<option value="">— Select —</option>' +
+    members.map(m => `<option value="${m.id}">${m.first} ${m.last}</option>`).join('');
+  renderEventFees(eventId);
+  document.getElementById('event-fees-modal').classList.add('open');
+}
+
+function closeEventFees() {
+  document.getElementById('event-fees-modal').classList.remove('open');
+  _activeEventId = null;
+}
+
+function renderEventFees(eventId) {
+  const list  = fees.filter(f => f.eventId === eventId).sort((a,b) => b.date.localeCompare(a.date));
+  const tbody = document.getElementById('evf-tbody');
+  const empty = document.getElementById('evf-empty');
+  const table = document.getElementById('evf-table');
+  const sumEl = document.getElementById('evf-summary');
+  const ev    = events.find(x => x.id === eventId);
+
+  const total = list.reduce((s,f) => s+(f.amount||0), 0);
+  const expected = (ev?.cost||0) * list.length;
+
+  if (sumEl) {
+    const parts = [`<span style="color:var(--gold-light);">Collected: <strong>$${total.toFixed(2)}</strong></span>`,
+                   `<span style="color:rgba(255,255,255,0.4);">${list.length} payment${list.length!==1?'s':''}</span>`];
+    if (ev?.cost > 0) parts.push(`<span style="color:rgba(255,255,255,0.4);">Expected: $${expected.toFixed(2)}</span>`);
+    sumEl.innerHTML = parts.join('');
+  }
+
+  if (!list.length) {
+    tbody.innerHTML = ''; table.style.display = 'none'; empty.style.display = '';
+    return;
+  }
+  table.style.display = ''; empty.style.display = 'none';
+  tbody.innerHTML = list.map(f => {
+    const mb = members.find(m => m.id === f.memberId);
+    return `<tr>
+      <td><strong>${mb ? mb.first+' '+mb.last : 'Unknown'}</strong></td>
+      <td style="color:var(--gold-light);font-weight:600;">$${(f.amount||0).toFixed(2)}</td>
+      <td>${fmtDate(f.date)}</td>
+      <td style="color:rgba(255,255,255,0.5);font-size:0.82rem;">${f.notes||''}</td>
+      <td class="admin-only"><button class="btn btn-danger btn-sm" onclick="deleteFee('${f.id}');renderEventFees('${eventId}');renderEvents();">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function addFeeFromEvent() {
+  const memberId = document.getElementById('evf-member').value;
+  const amount   = parseFloat(document.getElementById('evf-amount').value);
+  const date     = document.getElementById('evf-date').value;
+  const notes    = document.getElementById('evf-notes').value.trim();
+  const ev       = events.find(x => x.id === _activeEventId);
+  if (!memberId || isNaN(amount) || !date) { alert('Member, amount and date are required.'); return; }
+  const mb = members.find(m => m.id === memberId);
+  fees.push({
+    id: uid(), memberId, type: ev?.feeType || 'Other', amount, date,
+    year: new Date(date).getFullYear(), notes, eventId: _activeEventId
+  });
+  pushActivity('💰', `Fee recorded: ${mb?.first} ${mb?.last} — ${ev?.title} $${amount.toFixed(2)}`);
+  document.getElementById('evf-member').value = '';
+  document.getElementById('evf-notes').value  = '';
+  save(); populateFeeSelects(); renderEventFees(_activeEventId); renderEvents(); renderFees();
+}
+
 // ── Fees ───────────────────────────────────────────────────────────────────
 
 function populateFeeTypeSelect(id, selectedVal) {
@@ -2376,6 +2712,16 @@ function populateFeeSelects() {
     fy.innerHTML = '<option value="">All Years</option>' +
       years.map(y => `<option${y==cur?' selected':''}>${y}</option>`).join('');
   }
+  // Event filter in fees tab
+  const fe = document.getElementById('fee-filter-event');
+  if (fe) {
+    const cur = fe.value;
+    const sorted = [...events].sort((a,b) => b.date.localeCompare(a.date));
+    fe.innerHTML = '<option value="">All Events</option>' +
+      sorted.map(e => `<option value="${e.id}"${e.id===cur?' selected':''}>${e.title}</option>`).join('');
+  }
+  // Event dropdowns in add-fee and edit-fee forms
+  ['fee-event','ef-event'].forEach(id => populateEventSelect(id));
   // Add fee member select
   const fm2 = document.getElementById('fee-member');
   if (fm2) {
@@ -2398,14 +2744,16 @@ function addFee() {
   const date     = document.getElementById('fee-date').value;
   const year     = parseInt(document.getElementById('fee-year').value, 10) || new Date().getFullYear();
   const notes    = document.getElementById('fee-notes').value.trim();
+  const eventId  = document.getElementById('fee-event')?.value || '';
   if (!memberId || !type || isNaN(amount) || !date) {
     alert('Member, fee type, amount and date are required.'); return;
   }
   const mb = members.find(m => m.id === memberId);
-  fees.push({ id: uid(), memberId, type, amount, date, year, notes });
+  fees.push({ id: uid(), memberId, type, amount, date, year, notes, eventId });
   pushActivity('💰', `Fee recorded: ${mb?.first} ${mb?.last} — ${type} $${amount.toFixed(2)}`);
   document.getElementById('fee-amount').value = '';
   document.getElementById('fee-notes').value  = '';
+  document.getElementById('fee-event').value  = '';
   save(); populateFeeSelects(); renderFees();
 }
 
@@ -2413,11 +2761,13 @@ function renderFees() {
   const filterMember = document.getElementById('fee-filter-member')?.value || '';
   const filterType   = document.getElementById('fee-filter-type')?.value   || '';
   const filterYear   = document.getElementById('fee-filter-year')?.value   || '';
+  const filterEvent  = document.getElementById('fee-filter-event')?.value  || '';
 
   let list = [...fees].sort((a,b) => b.date.localeCompare(a.date));
   if (filterMember) list = list.filter(f => f.memberId === filterMember);
   if (filterType)   list = list.filter(f => f.type === filterType);
   if (filterYear)   list = list.filter(f => String(f.year) === String(filterYear));
+  if (filterEvent)  list = list.filter(f => f.eventId === filterEvent);
 
   // Members see only their own fees
   if (isMember() && !isAdmin()) list = list.filter(f => f.memberId === session?.memberId);
@@ -2442,7 +2792,8 @@ function renderFees() {
   }
 
   tbody.innerHTML = list.map(f => {
-    const mb = members.find(m => m.id === f.memberId);
+    const mb  = members.find(m => m.id === f.memberId);
+    const ev  = f.eventId ? events.find(e => e.id === f.eventId) : null;
     const name = mb ? `${mb.first} ${mb.last}` : 'Unknown';
     return `<tr>
       <td><strong>${name}</strong></td>
@@ -2450,6 +2801,7 @@ function renderFees() {
       <td style="color:var(--gold-light);font-weight:600;">$${(f.amount||0).toFixed(2)}</td>
       <td>${fmtDate(f.date)}</td>
       <td>${f.year || ''}</td>
+      <td style="font-size:0.82rem;">${ev ? `<span style="color:var(--gold-light);">🎉</span> ${ev.title}` : ''}</td>
       <td style="color:rgba(255,255,255,0.5);font-size:0.82rem;">${f.notes || ''}</td>
       <td class="admin-only" style="white-space:nowrap;">
         <button class="btn btn-ghost btn-sm" onclick="openEditFee('${f.id}')">Edit</button>
@@ -2473,6 +2825,7 @@ function openEditFee(id) {
   document.getElementById('ef-year').value   = f.year || '';
   document.getElementById('ef-notes').value  = f.notes || '';
   populateFeeTypeSelect('ef-type', f.type);
+  populateEventSelect('ef-event', f.eventId || '');
   const em = document.getElementById('ef-member');
   if (em) {
     em.innerHTML = '<option value="">— Select —</option>' +
@@ -2494,7 +2847,8 @@ function saveEditFee() {
   f.date       = document.getElementById('ef-date').value;
   f.year       = parseInt(document.getElementById('ef-year').value, 10) || new Date().getFullYear();
   f.notes      = document.getElementById('ef-notes').value.trim();
-  save(); closeEditFee(); populateFeeSelects(); renderFees();
+  f.eventId    = document.getElementById('ef-event').value || '';
+  save(); closeEditFee(); populateFeeSelects(); renderFees(); renderEvents();
 }
 
 function exportFees() {
@@ -2971,6 +3325,7 @@ document.getElementById('l-date').value   = today();
 document.getElementById('mtg-date').value = today();
 document.getElementById('fee-date').value = today();
 document.getElementById('fee-year').value = new Date().getFullYear();
+document.getElementById('ev-date').value  = today();
 msCreate('ms-m-role');
 msCreate('ms-em-role');
 applyLogo(); // apply immediately so logo shows before async Supabase load
