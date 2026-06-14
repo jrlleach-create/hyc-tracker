@@ -1,0 +1,3800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hackensack Yacht Club — Work Tracker</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <style>
+    :root {
+      --navy: #0a1628;
+      --blue: #1a3a6b;
+      --gold: #c9a84c;
+      --gold-light: #e8c97a;
+      --white: #f8f9fa;
+      --gray: #6c757d;
+      --light: #e9ecef;
+      --green: #2d7d46;
+      --red: #b02a37;
+      --amber: #b07d1a;
+      --radius: 8px;
+      --shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--navy);
+      color: var(--white);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%);
+      border-bottom: 3px solid var(--gold);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; flex-shrink: 0;
+      background: var(--gold);
+      overflow: hidden;
+    }
+    .logo img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      border-radius: 50%;
+    }
+
+    header h1 { font-size: 1.4rem; font-weight: 700; color: var(--white); }
+    header p  { font-size: 0.85rem; color: var(--gold-light); margin-top: 2px; }
+
+    /* ── Nav Tabs ── */
+    nav {
+      background: var(--blue);
+      display: flex;
+      padding: 0 24px;
+      gap: 4px;
+      border-bottom: 2px solid rgba(201,168,76,0.3);
+    }
+
+    nav button {
+      background: none; border: none; color: rgba(255,255,255,0.6);
+      padding: 12px 20px; cursor: pointer; font-size: 0.9rem;
+      border-bottom: 3px solid transparent; margin-bottom: -2px;
+      transition: all 0.2s;
+    }
+    nav button:hover  { color: var(--white); }
+    nav button.active { color: var(--gold); border-bottom-color: var(--gold); font-weight: 600; }
+
+    /* ── Main ── */
+    main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ── Cards & Grids ── */
+    .card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .card-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px;
+    }
+    .card-header h2 { font-size: 1.1rem; color: var(--gold-light); }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    /* ── Stat Tiles ── */
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .stat {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(201,168,76,0.25);
+      border-radius: var(--radius);
+      padding: 16px; text-align: center;
+    }
+    .stat-num { font-size: 2rem; font-weight: 700; color: var(--gold); }
+    .stat-lbl { font-size: 0.78rem; color: rgba(255,255,255,0.6); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    /* ── Forms ── */
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .form-row.three { grid-template-columns: 1fr 1fr 1fr; }
+    .form-row.single { grid-template-columns: 1fr; }
+    @media (max-width: 640px) { .form-row, .form-row.three { grid-template-columns: 1fr; } }
+
+    label { display: block; font-size: 0.8rem; color: var(--gold-light); margin-bottom: 4px; }
+
+    input, select, textarea {
+      width: 100%; padding: 9px 12px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px; color: var(--white); font-size: 0.9rem;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: var(--gold);
+    }
+    select option { background: var(--blue); }
+    textarea { resize: vertical; min-height: 72px; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 9px 18px; border: none; border-radius: 6px;
+      cursor: pointer; font-size: 0.875rem; font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: var(--gold); color: var(--navy); }
+    .btn-primary:hover { background: var(--gold-light); }
+    .btn-sm { padding: 5px 12px; font-size: 0.78rem; }
+    .btn-danger { background: rgba(176,42,55,0.3); color: #ff8a8a; border: 1px solid rgba(176,42,55,0.5); }
+    .btn-danger:hover { background: rgba(176,42,55,0.55); }
+    .btn-ghost { background: rgba(255,255,255,0.08); color: var(--white); border: 1px solid rgba(255,255,255,0.15); }
+    .btn-ghost:hover { background: rgba(255,255,255,0.15); }
+    .btn-success { background: rgba(45,125,70,0.3); color: #7fffaa; border: 1px solid rgba(45,125,70,0.5); }
+    .btn-success:hover { background: rgba(45,125,70,0.55); }
+
+    /* ── Tables ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    th {
+      text-align: left; padding: 10px 12px;
+      border-bottom: 2px solid rgba(201,168,76,0.4);
+      color: var(--gold-light); font-weight: 600; white-space: nowrap;
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.07); vertical-align: middle; }
+    tr:hover td { background: rgba(255,255,255,0.04); }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-block; padding: 3px 9px; border-radius: 12px;
+      font-size: 0.75rem; font-weight: 600;
+    }
+    .badge-pending  { background: rgba(176,125,26,0.3);  color: #ffd166; }
+    .badge-active   { background: rgba(26,58,107,0.6);   color: #74b3ff; }
+    .badge-done     { background: rgba(45,125,70,0.3);   color: #7fffaa; }
+    .badge-overdue  { background: rgba(176,42,55,0.3);   color: #ff8a8a; }
+    .badge-recurring{ background: rgba(120,80,200,0.3);  color: #c4a8ff; }
+
+    /* ── Priority dots ── */
+    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
+    .dot-low    { background: #6c757d; }
+    .dot-med    { background: #ffd166; }
+    .dot-high   { background: #ff8a8a; }
+
+    /* ── Empty state ── */
+    .empty { text-align: center; padding: 40px 20px; color: rgba(255,255,255,0.35); }
+    .empty .icon { font-size: 2.5rem; margin-bottom: 8px; }
+
+    /* ── Modal ── */
+    .modal-bg {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7); z-index: 100;
+      align-items: center; justify-content: center;
+    }
+    .modal-bg.open { display: flex; }
+    .modal {
+      background: #0f2044;
+      border: 1px solid rgba(201,168,76,0.4);
+      border-radius: var(--radius);
+      padding: 28px; width: 100%; max-width: 520px;
+      max-height: 90vh; overflow-y: auto;
+      margin: 16px;
+    }
+    .modal h3 { color: var(--gold-light); margin-bottom: 18px; font-size: 1.1rem; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+
+    /* ── Activity feed ── */
+    .feed-item {
+      display: flex; gap: 12px; padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      font-size: 0.85rem;
+    }
+    .feed-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+    .feed-time { color: rgba(255,255,255,0.4); font-size: 0.75rem; margin-top: 2px; }
+
+    /* ── Member avatar ── */
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--blue); border: 2px solid var(--gold);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700; color: var(--gold-light);
+      flex-shrink: 0;
+    }
+
+    /* ── Search ── */
+    .search-bar { position: relative; margin-bottom: 16px; }
+    .search-bar input { padding-left: 36px; }
+    .search-bar::before {
+      content: '🔍'; position: absolute; left: 10px; top: 50%;
+      transform: translateY(-50%); font-size: 0.85rem;
+    }
+
+    /* ── Progress bar ── */
+    .progress-bar { background: rgba(255,255,255,0.1); border-radius: 4px; height: 6px; overflow: hidden; margin-top: 4px; }
+    .progress-fill { height: 100%; background: var(--gold); border-radius: 4px; transition: width 0.4s; }
+
+    /* ── Multi-select ── */
+    .ms-wrap { position: relative; }
+    .ms-trigger {
+      width: 100%; min-height: 38px; padding: 5px 32px 5px 10px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px; color: var(--white); font-size: 0.9rem;
+      cursor: pointer; text-align: left; display: flex; flex-wrap: wrap;
+      gap: 4px; align-items: center; position: relative;
+      transition: border-color 0.2s;
+    }
+    .ms-trigger:focus, .ms-trigger.open { outline: none; border-color: var(--gold); }
+    .ms-trigger::after {
+      content: '▾'; position: absolute; right: 10px; top: 50%;
+      transform: translateY(-50%); color: rgba(255,255,255,0.5); font-size: 0.8rem;
+    }
+    .ms-tag {
+      background: rgba(201,168,76,0.25); border: 1px solid rgba(201,168,76,0.4);
+      color: var(--gold-light); padding: 2px 7px; border-radius: 10px; font-size: 0.75rem;
+      display: flex; align-items: center; gap: 4px; white-space: nowrap;
+    }
+    .ms-tag-x { cursor: pointer; opacity: 0.7; font-size: 0.85rem; line-height: 1; }
+    .ms-tag-x:hover { opacity: 1; }
+    .ms-placeholder { color: rgba(255,255,255,0.35); font-size: 0.875rem; }
+    .ms-dropdown {
+      display: none; position: absolute; z-index: 200; top: calc(100% + 4px); left: 0; right: 0;
+      background: #0f2044; border: 1px solid rgba(201,168,76,0.4);
+      border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      max-height: 260px; overflow-y: auto;
+    }
+    .ms-dropdown.open { display: block; }
+    .ms-search {
+      padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .ms-search input {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px; padding: 5px 9px; color: var(--white); font-size: 0.82rem; width: 100%;
+    }
+    .ms-search input:focus { outline: none; border-color: var(--gold); }
+    .ms-option {
+      padding: 8px 12px; cursor: pointer; font-size: 0.875rem;
+      display: flex; align-items: center; gap: 8px;
+      transition: background 0.15s;
+    }
+    .ms-option:hover { background: rgba(255,255,255,0.07); }
+    .ms-option input[type=checkbox] { width: auto; accent-color: var(--gold); }
+    .ms-add-custom {
+      padding: 8px 12px; border-top: 1px solid rgba(255,255,255,0.1);
+      display: flex; gap: 6px;
+    }
+    .ms-add-custom input {
+      flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px; padding: 5px 9px; color: var(--white); font-size: 0.82rem;
+    }
+    .ms-add-custom input:focus { outline: none; border-color: var(--gold); }
+    .ms-add-custom button {
+      background: rgba(201,168,76,0.2); border: 1px solid rgba(201,168,76,0.4);
+      color: var(--gold-light); border-radius: 4px; padding: 4px 10px;
+      cursor: pointer; font-size: 0.8rem;
+    }
+    .ms-add-custom button:hover { background: rgba(201,168,76,0.35); }
+
+    /* ── Print ── */
+    @media print {
+      body { background: white; color: black; }
+      header, nav, #login-overlay, .modal-bg { display: none !important; }
+      #print-sheet { display: block !important; }
+      #attendance-modal { display: block !important; position: static; background: none; }
+      .modal { border: none; background: white; color: black; max-width: 100%; }
+      .modal h3, .modal p { color: black; }
+      th { border-bottom: 2px solid #333; color: #333; }
+      td { border-bottom: 1px solid #ccc; color: #333; }
+      .btn, .admin-only, #att-signin-row, #att-admin-row { display: none !important; }
+    }
+
+    /* ── Login overlay ── */
+    #login-overlay {
+      position: fixed; inset: 0; z-index: 500;
+      background: var(--navy);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #login-overlay.hidden { display: none; }
+    .login-box {
+      background: #0f2044;
+      border: 1px solid rgba(201,168,76,0.4);
+      border-radius: var(--radius);
+      padding: 36px 32px;
+      width: 100%; max-width: 400px; margin: 16px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+    }
+    .login-box .logo { margin: 0 auto 16px; }
+    .login-box h2 { text-align: center; font-size: 1.2rem; color: var(--gold-light); margin-bottom: 4px; }
+    .login-box p  { text-align: center; font-size: 0.82rem; color: rgba(255,255,255,0.45); margin-bottom: 24px; }
+    .login-tabs { display: flex; gap: 0; margin-bottom: 24px; border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,0.12); }
+    .login-tab {
+      flex: 1; padding: 9px; text-align: center; cursor: pointer;
+      font-size: 0.875rem; color: rgba(255,255,255,0.5);
+      background: rgba(255,255,255,0.04); border: none; transition: all 0.2s;
+    }
+    .login-tab.active { background: rgba(201,168,76,0.2); color: var(--gold-light); font-weight: 600; }
+    .login-error { color: #ff8a8a; font-size: 0.82rem; margin-top: 8px; min-height: 18px; }
+
+    /* ── Permission system ── */
+    .member-mode .admin-only { display: none !important; }
+
+    /* ── Header user chip ── */
+    .user-chip {
+      margin-left: auto; display: flex; align-items: center; gap: 10px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 20px; padding: 5px 14px 5px 8px;
+      font-size: 0.82rem;
+    }
+    .user-chip .avatar { width: 26px; height: 26px; font-size: 0.65rem; border-width: 1px; }
+    .user-chip .name { color: var(--white); }
+    .user-chip .role-lbl { color: var(--gold-light); font-size: 0.75rem; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.3); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- Login Overlay -->
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="logo" id="login-logo" style="width:56px;height:56px;margin:0 auto 16px;"><span>⚓</span></div>
+    <h2>Hackensack Yacht Club</h2>
+    <p>Work Tracker — Please sign in</p>
+    <div style="text-align:center;margin-bottom:4px;" id="login-sync-status"></div>
+    <div class="login-tabs">
+      <button class="login-tab active" onclick="switchLoginTab('member')">Member</button>
+      <button class="login-tab" onclick="switchLoginTab('admin')">Admin</button>
+    </div>
+    <!-- Member login -->
+    <div id="login-member-panel">
+      <div style="margin-bottom:12px;">
+        <label>Select Your Name</label>
+        <select id="login-member-select" style="width:100%;padding:9px 12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:var(--white);font-size:0.9rem;">
+          <option value="">— Choose your name —</option>
+        </select>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label>PIN <span style="color:rgba(255,255,255,0.35);font-size:0.75rem;">(if set)</span></label>
+        <input id="login-member-pin" type="password" placeholder="Leave blank if no PIN" style="width:100%;padding:9px 12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:var(--white);font-size:0.9rem;" onkeydown="if(event.key==='Enter')loginMember()" />
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="loginMember()">Sign In as Member</button>
+      <div class="login-error" id="login-member-error"></div>
+    </div>
+    <!-- Admin login -->
+    <div id="login-admin-panel" style="display:none;">
+      <div style="margin-bottom:16px;">
+        <label>Admin Password</label>
+        <input id="login-admin-pw" type="password" placeholder="Password" style="width:100%;padding:9px 12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:var(--white);font-size:0.9rem;" onkeydown="if(event.key==='Enter')loginAdmin()" />
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="loginAdmin()">Sign In as Admin</button>
+      <div class="login-error" id="login-admin-error"></div>
+    </div>
+  </div>
+</div>
+
+<header>
+  <div class="logo" id="app-logo"><span>⚓</span></div>
+  <div>
+    <h1>Hackensack Yacht Club</h1>
+    <p>Member Work Tracker</p>
+  </div>
+  <div id="sync-pill" style="display:none;font-size:0.75rem;padding:4px 12px;border-radius:12px;border:1px solid;white-space:nowrap;"></div>
+  <div class="user-chip" id="user-chip" style="display:none;">
+    <div class="avatar" id="user-avatar"></div>
+    <div><div class="name" id="user-name"></div><div class="role-lbl" id="user-role-lbl"></div></div>
+    <button class="btn btn-ghost btn-sm" style="padding:3px 10px;font-size:0.75rem;" onclick="logout()">Sign Out</button>
+  </div>
+</header>
+
+<nav>
+  <button class="active" onclick="showPanel('dashboard')">Dashboard</button>
+  <button onclick="showPanel('tasks')">Tasks</button>
+  <button onclick="showPanel('members')">Members</button>
+  <button onclick="showPanel('log')">Work Log</button>
+  <button onclick="showPanel('meetings')">Meetings</button>
+  <button onclick="showPanel('fees')">Fees</button>
+  <button onclick="showPanel('events')">Events</button>
+</nav>
+
+<main>
+
+  <!-- ── Dashboard ── -->
+  <div id="panel-dashboard" class="panel active">
+    <div class="stats" id="stats-row"></div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header"><h2>Recent Activity</h2></div>
+        <div id="activity-feed">
+          <div class="empty"><div class="icon">📋</div>No activity yet.</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Open Tasks by Member</h2></div>
+        <div id="member-task-summary"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tasks ── -->
+  <div id="panel-tasks" class="panel">
+    <div class="card admin-only">
+      <div class="card-header">
+        <h2>Add New Task</h2>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>Task Title *</label>
+          <input id="t-title" type="text" placeholder="e.g. Repaint dock cleats" />
+        </div>
+        <div>
+          <label>Category</label>
+          <select id="t-category"></select>
+        </div>
+      </div>
+      <div class="form-row three">
+        <div>
+          <label>Assign To</label>
+          <select id="t-assignee"></select>
+        </div>
+        <div>
+          <label>Priority</label>
+          <select id="t-priority">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div>
+          <label>Due Date</label>
+          <input id="t-due" type="date" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>Timeline</label>
+          <input id="t-timeline" type="text" placeholder="e.g. Spring 2026, Jun 1–15, Week 3" />
+        </div>
+        <div>
+          <label>Description</label>
+          <textarea id="t-desc" placeholder="Optional details…" style="min-height:38px;"></textarea>
+        </div>
+      </div>
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="addTask()">Add Task</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearTaskForm()">Clear</button>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;color:rgba(255,255,255,0.7);font-size:0.85rem;">
+          <input type="checkbox" id="t-noassign" style="width:auto;accent-color:var(--gold);" />
+          No assignment needed
+        </label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>All Tasks</h2>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select id="filter-status" onchange="renderTasks()" style="width:auto;font-size:0.8rem;padding:6px 10px;">
+            <option value="">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="active">In Progress</option>
+            <option value="done">Done</option>
+          </select>
+          <select id="filter-member" onchange="renderTasks()" style="width:auto;font-size:0.8rem;padding:6px 10px;"></select>
+        </div>
+      </div>
+      <div class="search-bar">
+        <input id="task-search" type="text" placeholder="Search tasks…" oninput="renderTasks()" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Title</th><th>Category</th><th>Assigned To</th>
+              <th>Priority</th><th>Timeline</th><th>Due</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="task-table"></tbody>
+        </table>
+      </div>
+      <div id="task-empty" class="empty" style="display:none;">
+        <div class="icon">⚓</div>No tasks found.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Members ── -->
+  <div id="panel-members" class="panel">
+    <div class="card admin-only">
+      <div class="card-header"><h2>⚙ Admin Settings</h2></div>
+      <div class="form-row">
+        <div>
+          <label>New Admin Password</label>
+          <input id="admin-new-pw" type="password" placeholder="Enter new password" />
+        </div>
+        <div>
+          <label>Confirm Password</label>
+          <input id="admin-confirm-pw" type="password" placeholder="Confirm new password" />
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button class="btn btn-primary btn-sm" onclick="changeAdminPassword()">Change Password</button>
+        <span id="admin-pw-status" style="font-size:0.82rem;"></span>
+      </div>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:20px 0;" />
+      <h3 style="color:var(--gold-light);font-size:1rem;margin-bottom:10px;">🖼 Club Logo</h3>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px;">
+        <div class="logo" id="logo-preview" style="width:64px;height:64px;flex-shrink:0;"><span>⚓</span></div>
+        <div style="flex:1;min-width:220px;">
+          <p style="font-size:0.82rem;color:rgba(255,255,255,0.55);margin-bottom:8px;">
+            <strong style="color:var(--gold-light);">Preferred:</strong> place a file named
+            <code style="color:#7fffaa;">logo.png</code> in the same folder as
+            <code style="color:#7fffaa;">index.html</code> and redeploy — all users see it automatically.
+          </p>
+          <p style="font-size:0.82rem;color:rgba(255,255,255,0.4);margin-bottom:8px;">
+            <strong>Or</strong> upload below to save in this browser only:
+          </p>
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0;">
+            📂 Choose Logo
+            <input type="file" id="logo-file-input" accept="image/*" style="display:none;" onchange="handleLogoUpload(event)" />
+          </label>
+          <span id="logo-filename" style="font-size:0.82rem;color:rgba(255,255,255,0.4);margin-left:10px;"></span>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="removeLogo()" title="Remove stored logo">✕ Remove</button>
+      </div>
+      <span id="logo-status" style="font-size:0.82rem;"></span>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:20px 0;" />
+      <h3 style="color:var(--gold-light);font-size:1rem;margin-bottom:6px;">📍 Clubhouse Location</h3>
+      <p style="font-size:0.82rem;color:rgba(255,255,255,0.5);margin-bottom:14px;">
+        Members must be within the radius of these coordinates to sign in to a meeting.
+        Click <strong>Use My Location</strong> while standing at the clubhouse to auto-fill.
+      </p>
+      <div class="form-row three">
+        <div>
+          <label>Latitude</label>
+          <input id="geo-lat" type="number" step="any" placeholder="e.g. 40.895800" />
+        </div>
+        <div>
+          <label>Longitude</label>
+          <input id="geo-lng" type="number" step="any" placeholder="e.g. -74.043200" />
+        </div>
+        <div>
+          <label>Allowed Radius (metres)</label>
+          <input id="geo-radius" type="number" min="10" max="5000" placeholder="200" value="200" />
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="saveGeoConfig()">Save Location</button>
+        <button class="btn btn-ghost btn-sm" onclick="useMyLocation()">📍 Use My Location</button>
+        <span id="geo-status" style="font-size:0.82rem;"></span>
+      </div>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:20px 0;" />
+      <h3 style="color:var(--gold-light);font-size:1rem;margin-bottom:14px;">🗂 Task Categories</h3>
+      <div id="cat-list" style="margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input id="new-cat-input" type="text" placeholder="New category name"
+          style="flex:1;min-width:160px;"
+          onkeydown="if(event.key==='Enter')addCategory()" />
+        <button class="btn btn-primary btn-sm" onclick="addCategory()">+ Add</button>
+      </div>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:20px 0;" />
+      <h3 style="color:var(--gold-light);font-size:1rem;margin-bottom:14px;">☁ Cloud Sync (Supabase)</h3>
+      <p style="font-size:0.82rem;color:rgba(255,255,255,0.5);margin-bottom:14px;">
+        Enables real-time shared data across all devices.
+        <a href="https://supabase.com" target="_blank" style="color:var(--gold-light);">Create a free Supabase project</a>,
+        run the SQL below in the SQL Editor, then paste your credentials here.
+      </p>
+      <div style="background:rgba(0,0,0,0.3);border-radius:6px;padding:12px;font-size:0.78rem;font-family:monospace;color:#7fffaa;margin-bottom:16px;white-space:pre-wrap;user-select:all;">CREATE TABLE IF NOT EXISTS app_store (
+  key text PRIMARY KEY,
+  value jsonb NOT NULL,
+  updated_at timestamptz DEFAULT now()
+);
+ALTER TABLE app_store ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
+      <div class="form-row">
+        <div>
+          <label>Supabase Project URL</label>
+          <input id="sb-url" type="text" placeholder="https://xxxx.supabase.co" />
+        </div>
+        <div>
+          <label>Anon / Public Key</label>
+          <input id="sb-key" type="text" placeholder="eyJ…" />
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="saveSyncConfig()">Connect &amp; Sync</button>
+        <button class="btn btn-ghost btn-sm" onclick="embedSyncConfig()">🔗 Embed in App</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearSyncConfig()">Disconnect</button>
+        <span id="sync-status-text" style="font-size:0.82rem;"></span>
+      </div>
+      <div id="embed-instructions" style="display:none;margin-top:14px;background:rgba(0,0,0,0.3);border-radius:6px;padding:14px;">
+        <p style="font-size:0.82rem;color:var(--gold-light);margin-bottom:8px;">
+          📋 Copy these two lines and paste them into <code style="color:#7fffaa;">index.html</code>
+          replacing the blank <code style="color:#7fffaa;">SUPABASE_URL</code> and <code style="color:#7fffaa;">SUPABASE_KEY</code> lines near the top of the script, then redeploy.
+          After that, <strong>every visitor auto-connects</strong> with no setup.
+        </p>
+        <pre id="embed-snippet" style="font-size:0.78rem;color:#7fffaa;white-space:pre-wrap;word-break:break-all;margin-bottom:10px;"></pre>
+        <button class="btn btn-ghost btn-sm" onclick="copyEmbedSnippet()">📋 Copy to Clipboard</button>
+        <span id="embed-copy-status" style="font-size:0.8rem;margin-left:8px;"></span>
+      </div>
+    </div>
+
+    <div class="card admin-only">
+      <div class="card-header">
+        <h2>Import from Spreadsheet</h2>
+        <span style="font-size:0.78rem;color:rgba(255,255,255,0.45);">CSV or Excel (.xlsx)</span>
+      </div>
+      <p style="font-size:0.82rem;color:rgba(255,255,255,0.55);margin-bottom:14px;">
+        Your file should have columns for first name, last name, and optionally role, email, and phone.
+        Column names are matched automatically — you can map them manually if needed.
+      </p>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <label class="btn btn-ghost" style="cursor:pointer;margin:0;">
+          📂 Choose File
+          <input type="file" id="import-file" accept=".csv,.xlsx,.xls" style="display:none;" onchange="handleImportFile(event)" />
+        </label>
+        <span id="import-filename" style="font-size:0.85rem;color:rgba(255,255,255,0.45);">No file chosen</span>
+      </div>
+      <div id="import-preview" style="display:none;margin-top:16px;">
+        <div style="font-size:0.82rem;color:var(--gold-light);margin-bottom:8px;" id="import-preview-label"></div>
+        <div class="table-wrap" style="max-height:220px;overflow-y:auto;">
+          <table id="import-preview-table" style="font-size:0.8rem;"></table>
+        </div>
+        <div id="import-map" style="margin-top:14px;display:none;">
+          <div style="font-size:0.82rem;color:var(--gold-light);margin-bottom:8px;">Map columns — select which spreadsheet column matches each field:</div>
+          <div class="form-row three" id="import-map-selects"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px;align-items:center;">
+          <button class="btn btn-primary" onclick="confirmImport()">Import Members</button>
+          <button class="btn btn-ghost btn-sm" onclick="cancelImport()">Cancel</button>
+          <span id="import-status" style="font-size:0.82rem;"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card admin-only">
+      <div class="card-header"><h2>Add Member</h2></div>
+      <div class="form-row three">
+        <div>
+          <label>First Name *</label>
+          <input id="m-first" type="text" placeholder="First" />
+        </div>
+        <div>
+          <label>Last Name *</label>
+          <input id="m-last" type="text" placeholder="Last" />
+        </div>
+        <div>
+          <label>Role / Position</label>
+          <div class="ms-wrap" id="ms-m-role"></div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>Email</label>
+          <input id="m-email" type="email" placeholder="member@email.com" />
+        </div>
+        <div>
+          <label>Phone</label>
+          <input id="m-phone" type="tel" placeholder="(201) 555-0100" />
+        </div>
+      </div>
+      <div class="form-row three">
+        <div>
+          <label>Boat Name</label>
+          <input id="m-boat" type="text" placeholder="e.g. Sea Breeze" />
+        </div>
+        <div>
+          <label>Boat Size (ft)</label>
+          <input id="m-boatsize" type="text" placeholder="e.g. 32" />
+        </div>
+        <div>
+          <label>Date Joined</label>
+          <input id="m-joined" type="date" />
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label>Street Address</label>
+          <input id="m-address" type="text" placeholder="123 Harbor Rd" />
+        </div>
+      </div>
+      <div class="form-row three">
+        <div>
+          <label>City</label>
+          <input id="m-city" type="text" placeholder="Hackensack" />
+        </div>
+        <div>
+          <label>State</label>
+          <input id="m-state" type="text" placeholder="NJ" maxlength="2" style="text-transform:uppercase" />
+        </div>
+        <div>
+          <label>ZIP</label>
+          <input id="m-zip" type="text" placeholder="07601" maxlength="10" />
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:4px;">
+        <div>
+          <label>Member PIN <span style="color:rgba(255,255,255,0.35);font-size:0.75rem;">(optional — for login)</span></label>
+          <input id="m-pin" type="password" placeholder="Leave blank for no PIN" />
+        </div>
+        <div></div>
+      </div>
+      <button class="btn btn-primary" onclick="addMember()">Add Member</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>Members</h2></div>
+      <div class="search-bar">
+        <input id="member-search" type="text" placeholder="Search members…" oninput="renderMembers()" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Member</th><th>Role</th><th>Boat</th><th>Email</th><th>Phone</th><th>Joined</th><th>Open Tasks</th><th>Hours</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="member-table"></tbody>
+        </table>
+      </div>
+      <div id="member-empty" class="empty" style="display:none;">
+        <div class="icon">👥</div>No members yet.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Work Log ── -->
+  <div id="panel-log" class="panel">
+    <div class="card">
+      <div class="card-header"><h2>Log Work Entry</h2></div>
+      <div class="form-row three">
+        <div>
+          <label>Member *</label>
+          <select id="l-member"></select>
+        </div>
+        <div>
+          <label>Task Title *</label>
+          <input id="l-title" type="text" placeholder="What was worked on?" />
+        </div>
+        <div>
+          <label>Hours *</label>
+          <input id="l-hours" type="number" min="0.25" step="0.25" placeholder="e.g. 2.5" />
+        </div>
+      </div>
+      <div class="form-row three">
+        <div>
+          <label>Task</label>
+          <select id="l-task" onchange="autoFillLogTitle(this.value)"></select>
+        </div>
+        <div>
+          <label>Timeline</label>
+          <input id="l-timeline" type="text" placeholder="e.g. Spring 2026" />
+        </div>
+        <div>
+          <label>Date *</label>
+          <input id="l-date" type="date" />
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label>Notes</label>
+          <input id="l-notes" type="text" placeholder="Additional details…" />
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button class="btn btn-primary" onclick="addLog()">Log Work</button>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;color:rgba(255,255,255,0.7);font-size:0.85rem;">
+          <input type="checkbox" id="l-complete" style="width:auto;" checked />
+          Mark task complete
+        </label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>Work Log</h2>
+        <span id="total-hours-badge" style="font-size:0.85rem;color:var(--gold-light);"></span>
+      </div>
+      <div class="search-bar">
+        <input id="log-search" type="text" placeholder="Search log…" oninput="renderLog()" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Member</th><th>Task Title</th><th>Timeline</th><th>Linked Task</th><th>Status</th><th>Hours</th><th>Notes</th><th>Del</th></tr>
+          </thead>
+          <tbody id="log-table"></tbody>
+        </table>
+      </div>
+      <div id="log-empty" class="empty" style="display:none;">
+        <div class="icon">📝</div>No work logged yet.
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── Meetings ── -->
+  <div id="panel-meetings" class="panel">
+
+    <!-- Create Meeting (admin only) -->
+    <div class="card admin-only">
+      <div class="card-header"><h2>Create Meeting</h2></div>
+      <div class="form-row three">
+        <div>
+          <label>Meeting Title *</label>
+          <input id="mtg-title" type="text" placeholder="e.g. Monthly General Meeting" />
+        </div>
+        <div>
+          <label>Date *</label>
+          <input id="mtg-date" type="date" />
+        </div>
+        <div>
+          <label>Location</label>
+          <input id="mtg-location" type="text" placeholder="e.g. Clubhouse" value="Clubhouse" />
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label>Notes</label>
+          <input id="mtg-notes" type="text" placeholder="Optional agenda or notes" />
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="createMeeting()">Create Meeting</button>
+    </div>
+
+    <!-- Sign-in sheet -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Meetings</h2>
+        <select id="mtg-filter" onchange="renderMeetings()" style="width:auto;font-size:0.8rem;padding:6px 10px;">
+          <option value="upcoming">Upcoming &amp; Today</option>
+          <option value="past">Past</option>
+          <option value="all">All</option>
+        </select>
+      </div>
+      <div id="meetings-list">
+        <div class="empty"><div class="icon">📋</div>No meetings yet.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Fees ── -->
+  <div id="panel-fees" class="panel">
+
+    <!-- Add Fee (admin only) -->
+    <div class="card admin-only">
+      <div class="card-header"><h2>Record Fee Payment</h2></div>
+      <div class="form-row three">
+        <div>
+          <label>Member *</label>
+          <select id="fee-member"></select>
+        </div>
+        <div>
+          <label>Fee Type *</label>
+          <select id="fee-type"></select>
+        </div>
+        <div>
+          <label>Amount ($) *</label>
+          <input id="fee-amount" type="number" min="0" step="0.01" placeholder="0.00" />
+        </div>
+      </div>
+      <div class="form-row three">
+        <div>
+          <label>Date Paid *</label>
+          <input id="fee-date" type="date" />
+        </div>
+        <div>
+          <label>Year</label>
+          <input id="fee-year" type="number" min="2000" max="2099" placeholder="e.g. 2025" />
+        </div>
+        <div>
+          <label>Event <span style="color:rgba(255,255,255,0.4);">(optional)</span></label>
+          <select id="fee-event" onchange="onFeeEventChange()"></select>
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label>Notes</label>
+          <input id="fee-notes" type="text" placeholder="Optional" />
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="addFee()">Record Payment</button>
+    </div>
+
+    <!-- Member balance summary (visible to logged-in members) -->
+    <div class="card" id="fee-balance-card" style="display:none;">
+      <div class="card-header"><h2>My Fee Balance</h2></div>
+      <div id="fee-balance-body"></div>
+    </div>
+
+    <!-- Fee list -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Fee Payments</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <select id="fee-filter-member" class="admin-only" onchange="renderFees()" style="font-size:0.8rem;padding:6px 10px;width:auto;">
+            <option value="">All Members</option>
+          </select>
+          <select id="fee-filter-type" onchange="renderFees()" style="font-size:0.8rem;padding:6px 10px;width:auto;">
+            <option value="">All Types</option>
+          </select>
+          <select id="fee-filter-year" onchange="renderFees()" style="font-size:0.8rem;padding:6px 10px;width:auto;">
+            <option value="">All Years</option>
+          </select>
+          <select id="fee-filter-event" onchange="renderFees()" style="font-size:0.8rem;padding:6px 10px;width:auto;">
+            <option value="">All Events</option>
+          </select>
+          <button class="btn btn-ghost btn-sm admin-only" onclick="exportFees()">⬇ Export</button>
+        </div>
+      </div>
+      <div id="fee-summary" style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;font-size:0.85rem;"></div>
+      <div class="table-wrap">
+        <table id="fees-table">
+          <thead><tr>
+            <th class="admin-only">Member</th>
+            <th>Fee Type</th>
+            <th>Amount</th>
+            <th>Date Paid</th>
+            <th>Year</th>
+            <th>Event</th>
+            <th>Notes</th>
+            <th class="admin-only"></th>
+          </tr></thead>
+          <tbody id="fees-tbody"></tbody>
+        </table>
+      </div>
+      <div id="fees-empty" class="empty" style="display:none;">
+        <div class="icon">💰</div>No fee records found.
+      </div>
+    </div>
+
+    <!-- Chit Accounts (admin only) -->
+    <div class="card admin-only">
+      <div class="card-header"><h2>💳 Chit Accounts</h2></div>
+      <p style="font-size:0.82rem;color:rgba(255,255,255,0.5);margin-bottom:14px;">
+        Chit balances are automatically debited when members sign in to events with a fee.
+        Add credits here when members top up their account.
+      </p>
+      <div id="chit-manager-list"></div>
+    </div>
+
+    <!-- Fee Types (admin only) -->
+    <div class="card admin-only">
+      <div class="card-header"><h2>Fee Types</h2></div>
+      <div id="fee-types-list" style="margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input id="new-fee-type-input" type="text" placeholder="New fee type name"
+          style="flex:1;min-width:160px;"
+          onkeydown="if(event.key==='Enter')addFeeType()" />
+        <button class="btn btn-primary btn-sm" onclick="addFeeType()">+ Add</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Events ── -->
+  <div id="panel-events" class="panel">
+
+    <!-- Create Event (admin only) -->
+    <div class="card admin-only">
+      <div class="card-header"><h2>Create Event</h2></div>
+      <div class="form-row three">
+        <div>
+          <label>Event Title *</label>
+          <input id="ev-title" type="text" placeholder="e.g. Spring Regatta" />
+        </div>
+        <div>
+          <label>Date *</label>
+          <input id="ev-date" type="date" />
+        </div>
+        <div>
+          <label>Event Type</label>
+          <select id="ev-type">
+            <option value="">— Select —</option>
+            <option>Race</option>
+            <option>Social</option>
+            <option>Regatta</option>
+            <option>Work Party</option>
+            <option>Meeting</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row three">
+        <div>
+          <label>Location</label>
+          <input id="ev-location" type="text" placeholder="e.g. Clubhouse" />
+        </div>
+        <div>
+          <label>Fee Amount ($)</label>
+          <input id="ev-cost" type="number" min="0" step="0.01" placeholder="0.00" />
+        </div>
+        <div>
+          <label>Fee Type</label>
+          <select id="ev-fee-type"></select>
+        </div>
+      </div>
+      <div class="form-row single">
+        <div>
+          <label>Description</label>
+          <input id="ev-desc" type="text" placeholder="Optional details" />
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="addNewEvent()">Create Event</button>
+    </div>
+
+    <!-- Event list -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Events</h2>
+        <select id="ev-filter" onchange="renderEvents()" style="width:auto;font-size:0.8rem;padding:6px 10px;">
+          <option value="upcoming">Upcoming &amp; Today</option>
+          <option value="past">Past</option>
+          <option value="all">All</option>
+        </select>
+      </div>
+      <div id="events-list">
+        <div class="empty"><div class="icon">🎉</div>No events yet.</div>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<!-- Edit Event Modal -->
+<div class="modal-bg" id="edit-event-modal">
+  <div class="modal" style="max-width:620px;">
+    <h3>Edit Event</h3>
+    <input type="hidden" id="ee-id" />
+    <div class="form-row three">
+      <div><label>Title</label><input id="ee-title" type="text" /></div>
+      <div><label>Date</label><input id="ee-date" type="date" /></div>
+      <div><label>Type</label>
+        <select id="ee-type">
+          <option value="">— Select —</option>
+          <option>Race</option><option>Social</option><option>Regatta</option>
+          <option>Work Party</option><option>Meeting</option><option>Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row three">
+      <div><label>Location</label><input id="ee-location" type="text" /></div>
+      <div><label>Fee Amount ($)</label><input id="ee-cost" type="number" min="0" step="0.01" /></div>
+      <div><label>Fee Type</label><select id="ee-fee-type"></select></div>
+    </div>
+    <div class="form-row single"><div><label>Description</label><input id="ee-desc" type="text" /></div></div>
+    <div style="display:flex;gap:10px;margin-top:18px;">
+      <button class="btn btn-primary" onclick="saveEditEvent()">Save</button>
+      <button class="btn btn-ghost" onclick="closeEditEvent()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Event Detail Modal (Attendance + Fees) -->
+<div class="modal-bg" id="event-fees-modal">
+  <div class="modal" style="max-width:740px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <h3 id="evf-title" style="margin:0;"></h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeEventFees()">✕</button>
+    </div>
+    <p id="evf-meta" style="font-size:0.82rem;color:rgba(255,255,255,0.45);margin-bottom:10px;"></p>
+    <div id="evf-summary" style="font-size:0.85rem;margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap;"></div>
+
+    <!-- Member: sign-in button -->
+    <div id="evf-signin-row" style="display:none;margin-bottom:14px;">
+      <button class="btn btn-primary btn-sm" onclick="signInToEvent()">✋ Sign Me In</button>
+      <span id="evf-signin-status" style="font-size:0.85rem;margin-left:12px;"></span>
+    </div>
+
+    <!-- Two-column layout: Attendance | Fees -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;flex-wrap:wrap;" id="evf-grid">
+
+      <!-- Attendance -->
+      <div>
+        <div style="font-size:0.82rem;font-weight:600;color:var(--gold-light);margin-bottom:8px;">✋ Sign-ins</div>
+        <!-- Admin: sign in anyone -->
+        <div class="admin-only" style="display:flex;gap:6px;margin-bottom:10px;">
+          <select id="evf-attend-member" style="flex:1;font-size:0.82rem;padding:5px 8px;"></select>
+          <button class="btn btn-ghost btn-sm" onclick="adminSignInToEvent()">Sign In</button>
+        </div>
+        <div id="evf-attend-list" style="font-size:0.82rem;"></div>
+      </div>
+
+      <!-- Fees -->
+      <div>
+        <div style="font-size:0.82rem;font-weight:600;color:var(--gold-light);margin-bottom:8px;">💰 Payments</div>
+        <!-- Admin: record payment -->
+        <div class="admin-only" style="margin-bottom:10px;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+            <select id="evf-member" style="flex:1;font-size:0.82rem;padding:5px 8px;"></select>
+            <input id="evf-amount" type="number" min="0" step="0.01" style="width:80px;font-size:0.82rem;padding:5px 8px;" placeholder="$" />
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <input id="evf-date" type="date" style="flex:1;font-size:0.82rem;padding:5px 8px;" />
+            <input id="evf-notes" type="text" style="flex:1;font-size:0.82rem;padding:5px 8px;" placeholder="Notes" />
+            <button class="btn btn-primary btn-sm" onclick="addFeeFromEvent()">+ Record</button>
+          </div>
+        </div>
+        <div id="evf-fees-list" style="font-size:0.82rem;"></div>
+        <div id="evf-empty" style="display:none;font-size:0.82rem;color:rgba(255,255,255,0.35);padding:8px 0;">No payments yet.</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Edit Fee Modal -->
+<div class="modal-bg" id="edit-fee-modal">
+  <div class="modal">
+    <h3>Edit Fee Record</h3>
+    <input type="hidden" id="ef-id" />
+    <div class="form-row three">
+      <div><label>Member</label><select id="ef-member"></select></div>
+      <div><label>Fee Type</label><select id="ef-type"></select></div>
+      <div><label>Amount ($)</label><input id="ef-amount" type="number" min="0" step="0.01" /></div>
+    </div>
+    <div class="form-row three">
+      <div><label>Date Paid</label><input id="ef-date" type="date" /></div>
+      <div><label>Year</label><input id="ef-year" type="number" min="2000" max="2099" /></div>
+      <div><label>Event</label><select id="ef-event"></select></div>
+    </div>
+    <div class="form-row single"><div><label>Notes</label><input id="ef-notes" type="text" /></div></div>
+    <div style="display:flex;gap:10px;margin-top:18px;">
+      <button class="btn btn-primary" onclick="saveEditFee()">Save</button>
+      <button class="btn btn-ghost" onclick="closeEditFee()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Attendance Modal -->
+<div class="modal-bg" id="attendance-modal">
+  <div class="modal" style="max-width:640px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <h3 id="att-modal-title" style="margin:0;">Attendance</h3>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="printAttendance()">🖨 Print</button>
+        <button class="btn btn-ghost btn-sm" onclick="closeAttendanceModal()">✕</button>
+      </div>
+    </div>
+    <p id="att-modal-meta" style="font-size:0.82rem;color:rgba(255,255,255,0.45);margin-bottom:16px;"></p>
+
+    <!-- Member-visible sign-in button -->
+    <div id="att-signin-row" style="margin-bottom:16px;display:none;">
+      <button class="btn btn-primary" onclick="signMyselfIn()">✋ Sign Me In</button>
+      <span id="att-signed-status" style="font-size:0.85rem;margin-left:12px;color:#7fffaa;"></span>
+    </div>
+
+    <!-- Admin: sign in anyone -->
+    <div id="att-admin-row" class="admin-only" style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <select id="att-add-member" style="font-size:0.82rem;padding:6px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:var(--white);">
+        <option value="">— Sign in a member —</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="adminSignIn()">Sign In</button>
+    </div>
+
+    <div class="table-wrap" style="max-height:320px;overflow-y:auto;">
+      <table id="att-table">
+        <thead><tr><th>Member</th><th>Role</th><th>Signed In At</th><th class="admin-only">Remove</th></tr></thead>
+        <tbody id="att-tbody"></tbody>
+      </table>
+    </div>
+    <div id="att-empty" class="empty" style="display:none;padding:20px;">
+      <div class="icon">📝</div>No sign-ins yet.
+    </div>
+    <div style="margin-top:12px;font-size:0.82rem;color:rgba(255,255,255,0.4);" id="att-count"></div>
+  </div>
+</div>
+
+<!-- Edit Work Log Modal -->
+<div class="modal-bg" id="edit-log-modal">
+  <div class="modal">
+    <h3>Edit Work Log Entry</h3>
+    <input type="hidden" id="el-id" />
+    <div class="form-row three">
+      <div><label>Member</label><select id="el-member" class="admin-only-field"></select></div>
+      <div><label>Task Title *</label><input id="el-title" type="text" /></div>
+      <div><label>Hours *</label><input id="el-hours" type="number" min="0.25" step="0.25" /></div>
+    </div>
+    <div class="form-row three">
+      <div><label>Task</label><select id="el-task"></select></div>
+      <div><label>Timeline</label><input id="el-timeline" type="text" /></div>
+      <div><label>Date *</label><input id="el-date" type="date" /></div>
+    </div>
+    <div class="form-row single">
+      <div><label>Notes</label><input id="el-notes" type="text" /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeEditLog()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditLog()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Task Modal -->
+<div class="modal-bg" id="edit-modal">
+  <div class="modal">
+    <h3>Edit Task</h3>
+    <input type="hidden" id="edit-id" />
+    <div class="form-row single"><div><label>Title</label><input id="edit-title" type="text" /></div></div>
+    <div class="form-row">
+      <div>
+        <label>Category</label>
+        <select id="edit-category"></select>
+      </div>
+      <div>
+        <label>Assign To</label>
+        <select id="edit-assignee"></select>
+      </div>
+    </div>
+    <div class="form-row three">
+      <div>
+        <label>Priority</label>
+        <select id="edit-priority">
+          <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+        </select>
+      </div>
+      <div><label>Status</label>
+        <select id="edit-status">
+          <option value="pending">Pending</option>
+          <option value="active">In Progress</option>
+          <option value="done">Done</option>
+        </select>
+      </div>
+      <div><label>Due Date</label><input id="edit-due" type="date" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Timeline</label><input id="edit-timeline" type="text" placeholder="e.g. Spring 2026, Jun 1–15" /></div>
+      <div><label>Description</label><textarea id="edit-desc" style="min-height:38px;"></textarea></div>
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:rgba(255,255,255,0.7);font-size:0.85rem;">
+        <input type="checkbox" id="edit-noassign" style="width:auto;accent-color:var(--gold);" />
+        No assignment needed
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Member Modal -->
+<div class="modal-bg" id="edit-member-modal">
+  <div class="modal">
+    <h3>Edit Member</h3>
+    <input type="hidden" id="em-id" />
+    <div class="form-row">
+      <div><label>First Name *</label><input id="em-first" type="text" /></div>
+      <div><label>Last Name *</label><input id="em-last" type="text" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Role / Position</label><div class="ms-wrap" id="ms-em-role"></div></div>
+      <div><label>Email</label><input id="em-email" type="email" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Phone</label><input id="em-phone" type="tel" /></div>
+      <div><label>Date Joined</label><input id="em-joined" type="date" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Boat Name</label><input id="em-boat" type="text" /></div>
+      <div><label>Boat Size (ft)</label><input id="em-boatsize" type="text" /></div>
+    </div>
+    <div class="form-row single">
+      <div><label>Street Address</label><input id="em-address" type="text" /></div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Member PIN <span style="color:rgba(255,255,255,0.35);font-size:0.75rem;">(leave blank to keep current)</span></label>
+        <input id="em-pin" type="password" placeholder="Set or change PIN" />
+      </div>
+      <div></div>
+    </div>
+    <div class="form-row three">
+      <div><label>City</label><input id="em-city" type="text" /></div>
+      <div><label>State</label><input id="em-state" type="text" maxlength="2" style="text-transform:uppercase" /></div>
+      <div><label>ZIP</label><input id="em-zip" type="text" maxlength="10" /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeEditMember()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditMember()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Supabase Config ────────────────────────────────────────────────────────
+// Fill these in once (Admin Settings → Cloud Sync → Embed in App) and redeploy.
+// All users will then auto-connect without any setup.
+const SUPABASE_URL = 'https://qnvcaixnuudzglpjuyyn.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFudmNhaXhudXVkemdscGp1eXluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxNTcwNjIsImV4cCI6MjA5NTczMzA2Mn0.1w8Imps5pxDTyKf5Ju4H0pDvZfDEhM6T5Lv_a3F_RiA';
+// ───────────────────────────────────────────────────────────────────────────
+
+// ── State ──────────────────────────────────────────────────────────────────
+
+const STORE = {
+  load(k)    { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } },
+  save(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
+};
+
+let members    = STORE.load('hyc_members');
+let tasks      = STORE.load('hyc_tasks');
+let workLog    = STORE.load('hyc_log');
+let activity   = STORE.load('hyc_activity');
+let categories = STORE.load('hyc_categories');
+let fees       = STORE.load('hyc_fees');
+let feeTypes   = STORE.load('hyc_fee_types');
+let events          = STORE.load('hyc_events');
+let eventAttendance = STORE.load('hyc_event_attendance');
+let chitTransactions = STORE.load('hyc_chits');
+if (!categories.length) categories = [
+  'Dock & Marina','Grounds & Landscaping','Clubhouse',
+  'Fleet / Boats','Events','Safety & Equipment','Administration','Other'
+];
+if (!feeTypes.length) feeTypes = ['Annual Dues','Slip Fee','Guest Fees','Race Entry','Other'];
+
+function save() {
+  STORE.save('hyc_members',    members);
+  STORE.save('hyc_tasks',      tasks);
+  STORE.save('hyc_log',        workLog);
+  STORE.save('hyc_activity',   activity);
+  STORE.save('hyc_categories', categories);
+  STORE.save('hyc_fees',       fees);
+  STORE.save('hyc_fee_types',  feeTypes);
+  STORE.save('hyc_events',          events);
+  STORE.save('hyc_event_attendance', eventAttendance);
+  STORE.save('hyc_chits',           chitTransactions);
+  if (_sbClient) {
+    _pushToSupabase('hyc_members',    members);
+    _pushToSupabase('hyc_tasks',      tasks);
+    _pushToSupabase('hyc_log',        workLog);
+    _pushToSupabase('hyc_activity',   activity);
+    _pushToSupabase('hyc_categories', categories);
+    _pushToSupabase('hyc_fees',       fees);
+    _pushToSupabase('hyc_fee_types',  feeTypes);
+    _pushToSupabase('hyc_events',          events);
+    _pushToSupabase('hyc_event_attendance', eventAttendance);
+    _pushToSupabase('hyc_chits',           chitTransactions);
+  }
+}
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+function pushActivity(icon, text) {
+  activity.unshift({ icon, text, time: new Date().toISOString() });
+  if (activity.length > 50) activity.pop();
+  save();
+}
+
+// ── Navigation ─────────────────────────────────────────────────────────────
+
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  event.target.classList.add('active');
+  refreshAll();
+}
+
+// ── Members ────────────────────────────────────────────────────────────────
+
+function addMember() {
+  const first = document.getElementById('m-first').value.trim();
+  const last  = document.getElementById('m-last').value.trim();
+  if (!first || !last) { alert('First and last name are required.'); return; }
+  const m = {
+    id: uid(), first, last,
+    role:     msGet('ms-m-role'),
+    email:    document.getElementById('m-email').value.trim(),
+    phone:    document.getElementById('m-phone').value.trim(),
+    boat:     document.getElementById('m-boat').value.trim(),
+    boatSize: document.getElementById('m-boatsize').value.trim(),
+    joined:   document.getElementById('m-joined').value,
+    address:  document.getElementById('m-address').value.trim(),
+    city:     document.getElementById('m-city').value.trim(),
+    state:    document.getElementById('m-state').value.trim().toUpperCase(),
+    zip:      document.getElementById('m-zip').value.trim(),
+    pin:      document.getElementById('m-pin').value,
+  };
+  members.push(m);
+  pushActivity('👤', `Added member: ${first} ${last}`);
+  save();
+  ['m-first','m-email','m-phone','m-boat','m-boatsize','m-joined','m-address','m-city','m-state','m-zip','m-pin']
+    .forEach(id => document.getElementById(id).value = '');
+  msSet('ms-m-role', []);
+  refreshAll();
+}
+
+function openEditMember(id) {
+  const m = members.find(x => x.id === id); if (!m) return;
+  document.getElementById('em-id').value       = id;
+  document.getElementById('em-first').value    = m.first;
+  document.getElementById('em-last').value     = m.last;
+  msSet('ms-em-role', Array.isArray(m.role) ? m.role : (m.role ? [m.role] : []));
+  document.getElementById('em-email').value    = m.email    || '';
+  document.getElementById('em-phone').value    = m.phone    || '';
+  document.getElementById('em-boat').value     = m.boat     || '';
+  document.getElementById('em-boatsize').value = m.boatSize || '';
+  document.getElementById('em-joined').value   = m.joined   || '';
+  document.getElementById('em-address').value  = m.address  || '';
+  document.getElementById('em-city').value     = m.city     || '';
+  document.getElementById('em-state').value    = m.state    || '';
+  document.getElementById('em-zip').value      = m.zip      || '';
+  document.getElementById('edit-member-modal').classList.add('open');
+}
+
+function closeEditMember() { document.getElementById('edit-member-modal').classList.remove('open'); }
+
+function saveEditMember() {
+  const id = document.getElementById('em-id').value;
+  const m  = members.find(x => x.id === id); if (!m) return;
+  const first = document.getElementById('em-first').value.trim();
+  const last  = document.getElementById('em-last').value.trim();
+  if (!first || !last) { alert('First and last name are required.'); return; }
+  m.first    = first;
+  m.last     = last;
+  m.role     = msGet('ms-em-role');
+  m.email    = document.getElementById('em-email').value.trim();
+  m.phone    = document.getElementById('em-phone').value.trim();
+  m.boat     = document.getElementById('em-boat').value.trim();
+  m.boatSize = document.getElementById('em-boatsize').value.trim();
+  m.joined   = document.getElementById('em-joined').value;
+  m.address  = document.getElementById('em-address').value.trim();
+  m.city     = document.getElementById('em-city').value.trim();
+  m.state    = document.getElementById('em-state').value.trim().toUpperCase();
+  m.zip      = document.getElementById('em-zip').value.trim();
+  const newPin = document.getElementById('em-pin').value;
+  if (newPin) m.pin = newPin;
+  document.getElementById('em-pin').value = '';
+  pushActivity('✏️', `Updated member: ${first} ${last}`);
+  save(); closeEditMember(); refreshAll();
+}
+
+function deleteAllMembers() {
+  if (!members.length) return;
+  if (!confirm(`Delete all ${members.length} member(s)? Their tasks will be unassigned.`)) return;
+  tasks   = tasks.map(t => ({...t, assignee: ''}));
+  members = [];
+  pushActivity('🗑️', 'Deleted all members');
+  save(); refreshAll();
+}
+
+function deleteMember(id) {
+  const m = members.find(x => x.id === id);
+  if (!m) return;
+  if (!confirm(`Remove ${m.first} ${m.last}? Their tasks will be unassigned.`)) return;
+  tasks  = tasks.map(t => t.assignee === id ? {...t, assignee: ''} : t);
+  members = members.filter(x => x.id !== id);
+  pushActivity('🗑️', `Removed member: ${m.first} ${m.last}`);
+  save(); refreshAll();
+}
+
+function renderMembers() {
+  const q = document.getElementById('member-search').value.toLowerCase();
+  const filtered = members.filter(m =>
+    `${m.first} ${m.last} ${m.role} ${m.email}`.toLowerCase().includes(q)
+  );
+  const tbody = document.getElementById('member-table');
+  const empty = document.getElementById('member-empty');
+
+  if (!filtered.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(m => {
+    const open  = tasks.filter(t => t.assignee === m.id && t.status !== 'done').length;
+    const hours = workLog.filter(l => l.memberId === m.id).reduce((s, l) => s + (+l.hours||0), 0);
+    const init  = (m.first[0] + m.last[0]).toUpperCase();
+    const boatLabel = m.boat ? `${m.boat}${m.boatSize ? ` (${m.boatSize}ft)` : ''}` : '—';
+    return `<tr>
+      <td><div style="display:flex;align-items:center;gap:10px;">
+        <div class="avatar">${init}</div>
+        <div>
+          <strong>${m.first} ${m.last}</strong>
+          ${addressLine(m)}
+        </div>
+      </div></td>
+      <td>${roleDisplay(m.role)}</td>
+      <td style="white-space:nowrap">${boatLabel}</td>
+      <td>${m.email ? `<a href="mailto:${m.email}" style="color:var(--gold-light)">${m.email}</a>` : '—'}</td>
+      <td>${m.phone || '—'}</td>
+      <td style="white-space:nowrap">${fmtDate(m.joined)}</td>
+      <td><span style="color:${open>0?'#ffd166':'rgba(255,255,255,0.5)'}">${open}</span></td>
+      <td>${hours.toFixed(1)}</td>
+      <td style="white-space:nowrap" class="admin-only">
+        <button class="btn btn-ghost btn-sm" onclick="openEditMember('${m.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteMember('${m.id}')">Remove</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Tasks ──────────────────────────────────────────────────────────────────
+
+function addTask() {
+  const title = document.getElementById('t-title').value.trim();
+  if (!title) { alert('Task title is required.'); return; }
+  const t = {
+    id:       uid(),
+    title,
+    category: document.getElementById('t-category').value,
+    assignee: document.getElementById('t-assignee').value,
+    priority: document.getElementById('t-priority').value,
+    due:      document.getElementById('t-due').value,
+    timeline:  document.getElementById('t-timeline').value.trim(),
+    desc:      document.getElementById('t-desc').value.trim(),
+    noAssign:  document.getElementById('t-noassign').checked,
+    status:   'pending',
+    created:  new Date().toISOString()
+  };
+  tasks.push(t);
+  const who = t.assignee ? memberName(t.assignee) : 'unassigned';
+  pushActivity('📌', `Task added: "${title}" → ${who}`);
+  save(); clearTaskForm(); refreshAll();
+}
+
+function clearTaskForm() {
+  ['t-title','t-due','t-timeline','t-desc'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('t-noassign').checked = false;
+  document.getElementById('t-category').value = '';
+  document.getElementById('t-assignee').value = '';
+  document.getElementById('t-priority').value = 'medium';
+}
+
+function deleteTask(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t || !confirm(`Delete task "${t.title}"?`)) return;
+  tasks = tasks.filter(x => x.id !== id);
+  pushActivity('🗑️', `Deleted task: "${t.title}"`);
+  save(); refreshAll();
+}
+
+function openEdit(id) {
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  document.getElementById('edit-id').value    = id;
+  document.getElementById('edit-title').value = t.title;
+  populateCategorySelects(t.category);
+  document.getElementById('edit-priority').value = t.priority;
+  document.getElementById('edit-status').value   = t.status;
+  document.getElementById('edit-due').value      = t.due;
+  document.getElementById('edit-timeline').value   = t.timeline  || '';
+  document.getElementById('edit-noassign').checked = !!t.noAssign;
+  document.getElementById('edit-desc').value     = t.desc;
+  populateSelect('edit-assignee', true);
+  document.getElementById('edit-assignee').value = t.assignee;
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('edit-modal').classList.remove('open'); }
+
+function saveEdit() {
+  const id = document.getElementById('edit-id').value;
+  const t  = tasks.find(x => x.id === id); if (!t) return;
+  t.title    = document.getElementById('edit-title').value.trim();
+  t.category = document.getElementById('edit-category').value;
+  t.assignee = document.getElementById('edit-assignee').value;
+  t.priority = document.getElementById('edit-priority').value;
+  t.status   = document.getElementById('edit-status').value;
+  t.due      = document.getElementById('edit-due').value;
+  t.timeline  = document.getElementById('edit-timeline').value.trim();
+  t.noAssign  = document.getElementById('edit-noassign').checked;
+  t.desc     = document.getElementById('edit-desc').value.trim();
+  pushActivity('✏️', `Updated task: "${t.title}"`);
+  save(); closeModal(); refreshAll();
+}
+
+function cycleStatus(id) {
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  const order = ['pending','active','done'];
+  t.status = order[(order.indexOf(t.status) + 1) % order.length];
+  pushActivity('🔄', `Task "${t.title}" → ${statusLabel(t.status)}`);
+  save(); refreshAll();
+}
+
+function statusLabel(s) { return {pending:'Pending',active:'In Progress',done:'Done'}[s] || s; }
+function statusBadge(s, due) {
+  if (s !== 'done' && due && due < today()) return `<span class="badge badge-overdue">Overdue</span>`;
+  return `<span class="badge badge-${s}">${statusLabel(s)}</span>`;
+}
+
+function today() { return new Date().toISOString().split('T')[0]; }
+
+// ── Category helpers ───────────────────────────────────────────────────────
+function populateCategorySelects(selectedVal) {
+  ['t-category','edit-category'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cur = selectedVal !== undefined ? selectedVal : el.value;
+    el.innerHTML = '<option value="">— Select —</option>' +
+      categories.map(c => `<option${c === cur ? ' selected' : ''}>${c}</option>`).join('');
+  });
+}
+
+function renderCategoryManager() {
+  const list = document.getElementById('cat-list');
+  if (!list) return;
+  list.innerHTML = categories.map((c, i) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <input type="text" value="${c.replace(/"/g,'&quot;')}" data-ci="${i}"
+        style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
+               border-radius:5px;padding:5px 8px;color:#fff;font-size:0.85rem;"
+        onchange="renameCategory(${i}, this.value)" />
+      <button class="btn btn-danger btn-sm" onclick="deleteCategory(${i})" title="Delete">✕</button>
+    </div>`).join('');
+}
+
+function addCategory() {
+  const inp = document.getElementById('new-cat-input');
+  const name = inp.value.trim();
+  if (!name) return;
+  if (categories.includes(name)) { alert('Category already exists.'); return; }
+  categories.push(name);
+  inp.value = '';
+  save();
+  populateCategorySelects();
+  renderCategoryManager();
+}
+
+function renameCategory(idx, newName) {
+  newName = newName.trim();
+  if (!newName) { renderCategoryManager(); return; }
+  if (categories.includes(newName) && categories[idx] !== newName) {
+    alert('Category already exists.'); renderCategoryManager(); return;
+  }
+  const old = categories[idx];
+  categories[idx] = newName;
+  // Update any tasks using the old name
+  tasks.forEach(t => { if (t.category === old) t.category = newName; });
+  save();
+  populateCategorySelects();
+  renderCategoryManager();
+  renderTasks();
+}
+
+function deleteCategory(idx) {
+  const name = categories[idx];
+  const inUse = tasks.filter(t => t.category === name).length;
+  if (inUse && !confirm(`"${name}" is used by ${inUse} task(s). Delete anyway? Those tasks will have no category.`)) return;
+  categories.splice(idx, 1);
+  save();
+  populateCategorySelects();
+  renderCategoryManager();
+}
+
+function renderTasks() {
+  const q      = document.getElementById('task-search').value.toLowerCase();
+  const fstat  = document.getElementById('filter-status').value;
+  const fmem   = document.getElementById('filter-member').value;
+
+  let filtered = tasks.filter(t =>
+    `${t.title} ${t.category} ${t.desc}`.toLowerCase().includes(q) &&
+    (!fstat || t.status === fstat) &&
+    (!fmem  || t.assignee === fmem)
+  ).sort((a,b) => {
+    const pord = {high:0,medium:1,low:2};
+    return (pord[a.priority]||1) - (pord[b.priority]||1);
+  });
+
+  const tbody = document.getElementById('task-table');
+  const empty = document.getElementById('task-empty');
+
+  if (!filtered.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  const dotClass = {low:'dot-low',medium:'dot-med',high:'dot-high'};
+  tbody.innerHTML = filtered.map(t => `<tr>
+    <td>
+      <strong>${t.title}</strong>
+      ${t.desc ? `<div style="font-size:0.78rem;color:rgba(255,255,255,0.45);margin-top:2px;">${t.desc.slice(0,60)}${t.desc.length>60?'…':''}</div>` : ''}
+    </td>
+    <td>${t.category || '—'}</td>
+    <td>${t.assignee ? memberName(t.assignee) : t.noAssign ? '<span style="color:#c4a8ff">✓ No assign needed</span>' : '<span style="color:rgba(255,255,255,0.35)">Unassigned</span>'}</td>
+    <td><span class="dot ${dotClass[t.priority]||'dot-med'}"></span>${t.priority}</td>
+    <td style="white-space:nowrap;color:rgba(255,255,255,0.6);font-size:0.82rem">${t.timeline || '—'}</td>
+    <td style="white-space:nowrap">${t.due || '—'}</td>
+    <td style="white-space:nowrap" class="admin-only">
+      <button class="btn btn-ghost btn-sm" onclick="cycleStatus('${t.id}')" title="Advance status">▶</button>
+      <button class="btn btn-ghost btn-sm" onclick="openEdit('${t.id}')">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteTask('${t.id}')">Del</button>
+    </td>
+  </tr>`).join('');
+}
+
+// ── Work Log ───────────────────────────────────────────────────────────────
+
+function addLog() {
+  const memberId = document.getElementById('l-member').value;
+  const taskId   = document.getElementById('l-task').value;
+  const hours    = parseFloat(document.getElementById('l-hours').value);
+  const date     = document.getElementById('l-date').value;
+  const title    = document.getElementById('l-title').value.trim();
+  if (!memberId || !hours || !date || !title) { alert('Member, task title, hours, and date are required.'); return; }
+
+  const entry = { id: uid(), memberId, taskId, title, hours, date,
+    timeline: document.getElementById('l-timeline').value.trim(),
+    notes:    document.getElementById('l-notes').value.trim() };
+  workLog.unshift(entry);
+
+  const mn = memberName(memberId);
+  pushActivity('⏱️', `${mn} logged ${hours}h on "${title}"`);
+
+  if (document.getElementById('l-complete').checked && taskId) {
+    const t = tasks.find(x => x.id === taskId);
+    if (t) { t.status = 'done'; pushActivity('✅', `Task completed: "${title}"`); }
+  }
+
+  save();
+  document.getElementById('l-hours').value    = '';
+  document.getElementById('l-title').value    = '';
+  document.getElementById('l-timeline').value = '';
+  document.getElementById('l-notes').value    = '';
+  document.getElementById('l-complete').checked = false;
+  refreshAll();
+}
+
+function canEditLog(l) {
+  return isAdmin() || (isMember() && l.memberId === session?.memberId);
+}
+
+function openEditLog(id) {
+  const l = workLog.find(x => x.id === id); if (!l) return;
+  document.getElementById('el-id').value       = id;
+  document.getElementById('el-title').value    = l.title    || '';
+  document.getElementById('el-hours').value    = l.hours    || '';
+  document.getElementById('el-timeline').value = l.timeline || '';
+  document.getElementById('el-date').value     = l.date     || '';
+  document.getElementById('el-notes').value    = l.notes    || '';
+  populateSelect('el-member', false);
+  document.getElementById('el-member').value = l.memberId || '';
+  // Lock member field for non-admins
+  document.getElementById('el-member').disabled = !isAdmin();
+  populateTaskSelect('el-task');
+  document.getElementById('el-task').value = l.taskId || '';
+  document.getElementById('edit-log-modal').classList.add('open');
+}
+
+function closeEditLog() {
+  document.getElementById('edit-log-modal').classList.remove('open');
+}
+
+function saveEditLog() {
+  const id = document.getElementById('el-id').value;
+  const l  = workLog.find(x => x.id === id); if (!l) return;
+  if (!canEditLog(l)) return;
+  const title = document.getElementById('el-title').value.trim();
+  const hours = parseFloat(document.getElementById('el-hours').value);
+  const date  = document.getElementById('el-date').value;
+  if (!title || !hours || !date) { alert('Task title, hours, and date are required.'); return; }
+  if (isAdmin()) l.memberId = document.getElementById('el-member').value;
+  l.title    = title;
+  l.hours    = hours;
+  l.date     = date;
+  l.timeline = document.getElementById('el-timeline').value.trim();
+  l.taskId   = document.getElementById('el-task').value;
+  l.notes    = document.getElementById('el-notes').value.trim();
+  pushActivity('✏️', `Updated work log: "${title}"`);
+  save(); closeEditLog(); refreshAll();
+}
+
+function deleteLog(id) {
+  const l = workLog.find(x => x.id === id);
+  if (!l || !canEditLog(l)) return;
+  workLog = workLog.filter(x => x.id !== id);
+  pushActivity('🗑️', 'Deleted work log entry');
+  save(); refreshAll();
+}
+
+function renderLog() {
+  const q = document.getElementById('log-search').value.toLowerCase();
+  const filtered = workLog.filter(l => {
+    const mn = memberName(l.memberId).toLowerCase();
+    const tn = taskTitle(l.taskId).toLowerCase();
+    return `${mn} ${tn} ${l.notes}`.includes(q);
+  });
+
+  const total = workLog.reduce((s, l) => s + (+l.hours||0), 0);
+  document.getElementById('total-hours-badge').textContent = `Total: ${total.toFixed(1)} hrs`;
+
+  const tbody = document.getElementById('log-table');
+  const empty = document.getElementById('log-empty');
+
+  if (!filtered.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(l => `<tr>
+    <td style="white-space:nowrap">${fmtDate(l.date)}</td>
+    <td>${memberName(l.memberId)}</td>
+    <td>${l.title || '—'}</td>
+    <td style="color:rgba(255,255,255,0.6);font-size:0.82rem;white-space:nowrap">${l.timeline || '—'}</td>
+    <td style="font-size:0.8rem">${linkedTaskCell(l)}</td>
+    <td>${logStatusBadge(l.taskId)}</td>
+    <td><strong style="color:var(--gold-light)">${(+l.hours).toFixed(1)}</strong></td>
+    <td style="color:rgba(255,255,255,0.6)">${l.notes || '—'}</td>
+    <td>${canEditLog(l) ? `
+      <button class="btn btn-ghost btn-sm" onclick="openEditLog('${l.id}')">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteLog('${l.id}')">✕</button>` : ''}</td>
+  </tr>`).join('');
+}
+
+// ── Dashboard ──────────────────────────────────────────────────────────────
+
+function renderDashboard() {
+  const open    = tasks.filter(t => t.status !== 'done').length;
+  const done    = tasks.filter(t => t.status === 'done').length;
+  const overdue = tasks.filter(t => t.status !== 'done' && t.due && t.due < today()).length;
+  const totalH  = workLog.reduce((s, l) => s + (+l.hours||0), 0);
+
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat"><div class="stat-num">${members.length}</div><div class="stat-lbl">Members</div></div>
+    <div class="stat"><div class="stat-num">${open}</div><div class="stat-lbl">Open Tasks</div></div>
+    <div class="stat"><div class="stat-num">${done}</div><div class="stat-lbl">Completed</div></div>
+    <div class="stat"><div class="stat-num" style="color:${overdue?'#ff8a8a':'var(--gold)'}">${overdue}</div><div class="stat-lbl">Overdue</div></div>
+    <div class="stat"><div class="stat-num">${totalH.toFixed(1)}</div><div class="stat-lbl">Hours Logged</div></div>
+  `;
+
+  // Activity feed
+  const feed = document.getElementById('activity-feed');
+  if (!activity.length) {
+    feed.innerHTML = '<div class="empty"><div class="icon">📋</div>No activity yet.</div>';
+  } else {
+    feed.innerHTML = activity.slice(0,15).map(a => `
+      <div class="feed-item">
+        <span class="feed-icon">${a.icon}</span>
+        <div><div>${a.text}</div><div class="feed-time">${relTime(a.time)}</div></div>
+      </div>`).join('');
+  }
+
+  // Member task summary
+  const mts = document.getElementById('member-task-summary');
+  if (!members.length) { mts.innerHTML = '<div class="empty"><div class="icon">👥</div>No members added.</div>'; return; }
+  mts.innerHTML = members.map(m => {
+    const open = tasks.filter(t => t.assignee === m.id && t.status !== 'done').length;
+    const total = tasks.filter(t => t.assignee === m.id).length;
+    const pct = total ? Math.round((total - open) / total * 100) : 0;
+    return `<div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span style="font-size:0.875rem;">${m.first} ${m.last}</span>
+        <span style="font-size:0.75rem;color:rgba(255,255,255,0.5);">${open} open / ${total} total</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function memberName(id) {
+  const m = members.find(x => x.id === id);
+  return m ? `${m.first} ${m.last}` : 'Unknown';
+}
+function taskTitle(id) {
+  const t = tasks.find(x => x.id === id);
+  return t ? t.title : 'Unknown Task';
+}
+
+function populateSelect(selectId, withBlank = false) {
+  const el = document.getElementById(selectId);
+  const cur = el.value;
+  el.innerHTML = (withBlank ? '<option value="">— Unassigned —</option>' : '<option value="">— Select Member —</option>') +
+    members.map(m => `<option value="${m.id}">${m.first} ${m.last}</option>`).join('');
+  if (cur) el.value = cur;
+}
+
+function populateTaskSelect(selectId) {
+  const el = document.getElementById(selectId);
+  const cur = el.value;
+  el.innerHTML = '<option value="">— Select Task —</option>' +
+    tasks.map(t => `<option value="${t.id}">${t.title}${t.status === 'done' ? ' ✓' : ''}</option>`).join('');
+  if (cur) el.value = cur;
+}
+
+function populateFilterMember() {
+  const el = document.getElementById('filter-member');
+  const cur = el.value;
+  el.innerHTML = '<option value="">All Members</option>' +
+    members.map(m => `<option value="${m.id}">${m.first} ${m.last}</option>`).join('');
+  if (cur) el.value = cur;
+}
+
+function linkedTaskCell(l) {
+  if (!l.taskId) return '—';
+  const t = tasks.find(x => x.id === l.taskId);
+  if (t) return `<span style="color:rgba(255,255,255,0.5)">${t.title}</span>`;
+  // broken reference
+  return `<span style="color:#ff8a8a">⚠ Missing</span>
+    <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">
+      <select id="relink-${l.id}" style="font-size:0.75rem;padding:2px 6px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:var(--white);">
+        <option value="">— relink —</option>
+        ${tasks.map(t => `<option value="${t.id}">${t.title}</option>`).join('')}
+      </select>
+      <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:2px 8px;" onclick="relinkLog('${l.id}')">Link</button>
+      <button class="btn btn-danger btn-sm" style="font-size:0.72rem;padding:2px 8px;" onclick="clearLogTask('${l.id}')">Clear</button>
+    </div>`;
+}
+
+function relinkLog(logId) {
+  const l = workLog.find(x => x.id === logId); if (!l) return;
+  const sel = document.getElementById('relink-' + logId);
+  if (!sel || !sel.value) { alert('Select a task to link.'); return; }
+  l.taskId = sel.value;
+  pushActivity('🔗', `Re-linked work log entry to "${taskTitle(sel.value)}"`);
+  save(); refreshAll();
+}
+
+function clearLogTask(logId) {
+  const l = workLog.find(x => x.id === logId); if (!l) return;
+  l.taskId = '';
+  pushActivity('🗑️', 'Cleared broken task reference from work log entry');
+  save(); refreshAll();
+}
+
+function logStatusBadge(taskId) {
+  if (!taskId) return '';
+  const t = tasks.find(x => x.id === taskId);
+  if (!t) return '';
+  if (t.status === 'done') return statusBadge('done', t.due);
+  if (t.noAssign || !t.assignee) return '';
+  return statusBadge(t.status, t.due);
+}
+
+function autoFillLogTitle(taskId) {
+  const t = tasks.find(x => x.id === taskId);
+  if (!t) return;
+  const titleField    = document.getElementById('l-title');
+  const timelineField = document.getElementById('l-timeline');
+  if (!titleField.value.trim())    titleField.value    = t.title;
+  if (!timelineField.value.trim()) timelineField.value = t.timeline || '';
+}
+
+function fmtDate(val) {
+  if (!val) return '—';
+  const m = String(val).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[2]}/${m[3]}/${m[1]}` : val;
+}
+
+function relTime(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h/24)}d ago`;
+}
+
+function refreshAll() {
+  applyLogo();
+  // Pre-fill geo config fields if saved
+  const geo = getGeoConfig();
+  if (geo) {
+    const latEl = document.getElementById('geo-lat');
+    const lngEl = document.getElementById('geo-lng');
+    const radEl = document.getElementById('geo-radius');
+    if (latEl) latEl.value = geo.lat;
+    if (lngEl) lngEl.value = geo.lng;
+    if (radEl) radEl.value = geo.radius;
+  }
+  populateCategorySelects();
+  renderCategoryManager();
+  populateFeeSelects();
+  renderFeeTypeManager();
+  renderChitManager();
+  renderFees();
+  renderEvents();
+  populateSelect('t-assignee', true);
+  populateSelect('l-member');
+  populateSelect('edit-assignee', true);
+  populateTaskSelect('l-task');
+  populateFilterMember();
+  populateLoginMemberSelect();
+  renderMembers();
+  renderTasks();
+  renderLog();
+  renderDashboard();
+  renderMeetings();
+  applyPermissions();
+}
+
+// ── Import ─────────────────────────────────────────────────────────────────
+
+let _importRows = [];   // raw array-of-objects from sheet
+let _importCols = [];   // detected column headers
+
+function toDateStr(val) {
+  if (!val && val !== 0) return '';
+  if (val instanceof Date) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  // numeric serial — as a number or a plain numeric string
+  const n = typeof val === 'number' ? val : (String(val).trim().match(/^\d+$/) ? Number(val) : null);
+  if (n !== null) {
+    const d = new Date(Math.round((n - 25569) * 86400 * 1000));
+    return toDateStr(d);
+  }
+  return String(val).trim();
+}
+
+const FIELD_ALIASES = {
+  first:    ['first','firstname','first name','first_name','given name','forename','fname'],
+  last:     ['last','lastname','last name','last_name','surname','family name','lname'],
+  role:     ['role','position','title','rank','post'],
+  email:    ['email','e-mail','email address','mail'],
+  phone:    ['phone','telephone','tel','cell','mobile','phone number'],
+  boat:     ['boat','boat name','vessel','vessel name','sailboat','yacht'],
+  boatSize: ['boat size','boatsize','size','length','loa','boat length','vessel size','ft','feet'],
+  joined:   ['joined','date joined','member since','join date','membership date','start date'],
+  address:  ['address','street','street address','home address','mailing address','addr'],
+  city:     ['city','town','municipality'],
+  state:    ['state','province','st'],
+  zip:      ['zip','zip code','zipcode','postal','postal code'],
+};
+
+function bestGuess(cols) {
+  const map = {};
+  for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
+    for (const col of cols) {
+      if (aliases.includes(col.toLowerCase().trim())) { map[field] = col; break; }
+    }
+  }
+  return map;
+}
+
+function handleImportFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  document.getElementById('import-filename').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb   = XLSX.read(data, { type: 'array' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '', cellDates: true });
+      if (!rows.length) { alert('The spreadsheet appears to be empty.'); return; }
+      _importRows = rows;
+      _importCols = Object.keys(rows[0]);
+      showImportPreview();
+    } catch (err) {
+      alert('Could not read file: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function showImportPreview() {
+  const preview = document.getElementById('import-preview');
+  const label   = document.getElementById('import-preview-label');
+  const table   = document.getElementById('import-preview-table');
+  const mapDiv  = document.getElementById('import-map');
+
+  const sample  = _importRows.slice(0, 5);
+  label.textContent = `Found ${_importRows.length} row(s) · ${_importCols.length} column(s) · Showing first ${sample.length}`;
+
+  table.innerHTML = `<thead><tr>${_importCols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
+    <tbody>${sample.map(r => `<tr>${_importCols.map(c => `<td>${r[c] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>`;
+
+  // Auto-map and show mapping selects
+  const guess = bestGuess(_importCols);
+  const fields = [
+    { key: 'first',    label: 'First Name *' },
+    { key: 'last',     label: 'Last Name *'  },
+    { key: 'role',     label: 'Role'         },
+    { key: 'email',    label: 'Email'        },
+    { key: 'phone',    label: 'Phone'        },
+    { key: 'boat',     label: 'Boat Name'    },
+    { key: 'boatSize', label: 'Boat Size'    },
+    { key: 'joined',   label: 'Date Joined'  },
+    { key: 'address',  label: 'Street Address' },
+    { key: 'city',     label: 'City'          },
+    { key: 'state',    label: 'State'         },
+    { key: 'zip',      label: 'ZIP'           },
+  ];
+  document.getElementById('import-map-selects').innerHTML = fields.map(f => `
+    <div>
+      <label>${f.label}</label>
+      <select id="imap-${f.key}" style="font-size:0.82rem;">
+        <option value="">— skip —</option>
+        ${_importCols.map(c => `<option value="${c}" ${guess[f.key]===c?'selected':''}>${c}</option>`).join('')}
+      </select>
+    </div>`).join('');
+
+  mapDiv.style.display = '';
+  preview.style.display = '';
+  document.getElementById('import-status').textContent = '';
+}
+
+function confirmImport() {
+  const getCol = k => document.getElementById('imap-' + k)?.value || '';
+  const firstCol = getCol('first');
+  const lastCol  = getCol('last');
+  if (!firstCol || !lastCol) { alert('You must map at least First Name and Last Name columns.'); return; }
+
+  let added = 0, skipped = 0;
+  for (const row of _importRows) {
+    const first = String(row[firstCol] ?? '').trim();
+    const last  = String(row[lastCol]  ?? '').trim();
+    if (!first || !last) { skipped++; continue; }
+    // Skip duplicates (same first+last, case-insensitive)
+    const exists = members.some(m =>
+      m.first.toLowerCase() === first.toLowerCase() &&
+      m.last.toLowerCase()  === last.toLowerCase()
+    );
+    if (exists) { skipped++; continue; }
+    members.push({
+      id:       uid(),
+      first,    last,
+      role:     String(row[getCol('role')] ?? '').trim().split(/[,;|]+/).map(s=>s.trim()).filter(Boolean),
+      email:    String(row[getCol('email')]    ?? '').trim(),
+      phone:    String(row[getCol('phone')]    ?? '').trim(),
+      boat:     String(row[getCol('boat')]     ?? '').trim(),
+      boatSize: String(row[getCol('boatSize')] ?? '').trim(),
+      joined:   toDateStr(row[getCol('joined')]),
+      address:  String(row[getCol('address')] ?? '').trim(),
+      city:     String(row[getCol('city')]    ?? '').trim(),
+      state:    String(row[getCol('state')]   ?? '').trim().toUpperCase(),
+      zip:      String(row[getCol('zip')]     ?? '').trim(),
+    });
+    added++;
+  }
+
+  pushActivity('📥', `Imported ${added} member(s) from spreadsheet`);
+  save(); refreshAll();
+
+  const status = document.getElementById('import-status');
+  status.style.color = added ? '#7fffaa' : '#ffd166';
+  status.textContent = `✓ ${added} imported, ${skipped} skipped (duplicates / blank rows)`;
+  document.getElementById('import-file').value = '';
+  document.getElementById('import-filename').textContent = 'No file chosen';
+}
+
+function cancelImport() {
+  document.getElementById('import-preview').style.display = 'none';
+  document.getElementById('import-file').value = '';
+  document.getElementById('import-filename').textContent = 'No file chosen';
+  _importRows = []; _importCols = [];
+}
+
+// ── Multi-select component ─────────────────────────────────────────────────
+
+const ROLES = [
+  'Commodore','Vice Commodore','Rear Commodore','Fleet Captain','Past Commodore',
+  'Dock Master','Treasurer','Secretary','Race Committee','Safety Officer',
+  'Social Chair','Membership Chair','Junior Sailing Director','Harbormaster','Volunteer',
+];
+
+function msCreate(wrapId, placeholder = 'Select roles…') {
+  const wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  wrap.dataset.selected = JSON.stringify([]);
+  wrap.dataset.options  = JSON.stringify([...ROLES]);
+  wrap.innerHTML = _msBuild(wrapId, placeholder, [], [...ROLES]);
+  _msBindEvents(wrapId, placeholder);
+}
+
+function _msBuild(id, placeholder, selected, options) {
+  const tags = selected.map(s =>
+    `<span class="ms-tag">${s}<span class="ms-tag-x" data-val="${s}" onclick="msRemove('${id}','${s}',event)">×</span></span>`
+  ).join('');
+  const filtered = options.filter(o => !selected.includes(o));
+  const checks = filtered.map(o =>
+    `<label class="ms-option"><input type="checkbox" onchange="msToggle('${id}','${o}',this.checked)" />${o}</label>`
+  ).join('');
+  return `
+    <button type="button" class="ms-trigger" onclick="msToggleDrop('${id}',event)">
+      ${tags || `<span class="ms-placeholder">${placeholder}</span>`}
+    </button>
+    <div class="ms-dropdown" id="${id}-drop">
+      <div class="ms-search"><input type="text" placeholder="Search…" oninput="msFilter('${id}',this.value)" /></div>
+      <div id="${id}-opts">${checks}</div>
+      <div class="ms-add-custom">
+        <input type="text" id="${id}-custom" placeholder="Add custom role…" onkeydown="if(event.key==='Enter'){msAddCustom('${id}');event.preventDefault();}" />
+        <button onclick="msAddCustom('${id}')">Add</button>
+      </div>
+    </div>`;
+}
+
+function _msBindEvents(id) {
+  document.addEventListener('click', e => {
+    const drop = document.getElementById(id + '-drop');
+    if (!drop) return;
+    if (!document.getElementById(id)?.contains(e.target)) {
+      drop.classList.remove('open');
+    }
+  }, true);
+}
+
+function msToggleDrop(id, e) {
+  e.stopPropagation();
+  document.getElementById(id + '-drop').classList.toggle('open');
+}
+
+function msToggle(id, val, checked) {
+  const wrap = document.getElementById(id);
+  const selected = JSON.parse(wrap.dataset.selected);
+  const options  = JSON.parse(wrap.dataset.options);
+  const next = checked ? [...selected, val] : selected.filter(s => s !== val);
+  wrap.dataset.selected = JSON.stringify(next);
+  _msRefresh(id, options, next);
+}
+
+function msRemove(id, val, e) {
+  e.stopPropagation();
+  const wrap = document.getElementById(id);
+  const selected = JSON.parse(wrap.dataset.selected).filter(s => s !== val);
+  const options  = JSON.parse(wrap.dataset.options);
+  wrap.dataset.selected = JSON.stringify(selected);
+  _msRefresh(id, options, selected);
+}
+
+function msAddCustom(id) {
+  const input = document.getElementById(id + '-custom');
+  const val   = input.value.trim();
+  if (!val) return;
+  const wrap    = document.getElementById(id);
+  const options  = JSON.parse(wrap.dataset.options);
+  const selected = JSON.parse(wrap.dataset.selected);
+  if (!options.includes(val)) options.push(val);
+  if (!selected.includes(val)) selected.push(val);
+  wrap.dataset.options  = JSON.stringify(options);
+  wrap.dataset.selected = JSON.stringify(selected);
+  input.value = '';
+  _msRefresh(id, options, selected);
+}
+
+function msFilter(id, q) {
+  const wrap     = document.getElementById(id);
+  const selected = JSON.parse(wrap.dataset.selected);
+  const options  = JSON.parse(wrap.dataset.options);
+  const filtered = options.filter(o => !selected.includes(o) && o.toLowerCase().includes(q.toLowerCase()));
+  document.getElementById(id + '-opts').innerHTML = filtered.map(o =>
+    `<label class="ms-option"><input type="checkbox" onchange="msToggle('${id}','${o}',this.checked)" />${o}</label>`
+  ).join('');
+}
+
+function _msRefresh(id, options, selected) {
+  const wrap = document.getElementById(id);
+  const isOpen = document.getElementById(id + '-drop')?.classList.contains('open');
+  wrap.innerHTML = _msBuild(id, wrap.dataset.placeholder || 'Select roles…', selected, options);
+  if (isOpen) document.getElementById(id + '-drop').classList.add('open');
+}
+
+function msGet(id) {
+  const wrap = document.getElementById(id);
+  return wrap ? JSON.parse(wrap.dataset.selected || '[]') : [];
+}
+
+function msSet(id, values) {
+  const wrap = document.getElementById(id);
+  if (!wrap) return;
+  const existing = JSON.parse(wrap.dataset.options || JSON.stringify(ROLES));
+  const allOpts  = [...new Set([...existing, ...values])];
+  wrap.dataset.options  = JSON.stringify(allOpts);
+  wrap.dataset.selected = JSON.stringify(values);
+  _msRefresh(id, allOpts, values);
+}
+
+function addressLine(m) {
+  const street = m.address || '';
+  const csz = [m.city, m.state ? (m.city ? m.state : m.state) : '', m.zip]
+    .filter(Boolean).join(m.city && m.state ? ', ' : ' ').replace(/,\s*,/g, ',').trim();
+  const full = [street, csz].filter(Boolean).join(', ');
+  return full ? `<div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-top:1px;">${full}</div>` : '';
+}
+
+function roleDisplay(role) {
+  const arr = Array.isArray(role) ? role : (role ? [role] : []);
+  if (!arr.length) return '<span style="color:rgba(255,255,255,0.3)">—</span>';
+  return arr.map(r => `<span class="ms-tag" style="display:inline-flex;">${r}</span>`).join(' ');
+}
+
+// ── Cloud Sync (Supabase) ──────────────────────────────────────────────────
+
+const SB_CFG_KEY = 'hyc_sb_config';
+let   _sbClient  = null;
+let   _sbChannel = null;
+const SB_KEYS    = ['hyc_members','hyc_tasks','hyc_log','hyc_activity','hyc_meetings','hyc_attendance','hyc_categories','hyc_fees','hyc_fee_types','hyc_events','hyc_event_attendance','hyc_chits'];
+
+function getSbConfig() {
+  try { return JSON.parse(localStorage.getItem(SB_CFG_KEY)) || null; } catch { return null; }
+}
+
+async function initSupabase(url, key) {
+  try {
+    _sbClient = supabase.createClient(url, key);
+    // Test connection
+    const { error } = await _sbClient.from('app_store').select('key').limit(1);
+    if (error) throw error;
+    _startRealtime();
+    setSyncPill('🟢 Synced', '#7fffaa');
+    return true;
+  } catch (e) {
+    _sbClient = null;
+    setSyncPill('🔴 Sync Error', '#ff8a8a');
+    console.error('Supabase init failed:', e);
+    return false;
+  }
+}
+
+function _startRealtime() {
+  if (_sbChannel) _sbChannel.unsubscribe();
+  _sbChannel = _sbClient
+    .channel('app_store_changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_store' },
+      async payload => {
+        const k = payload.new?.key || payload.old?.key;
+        if (!SB_KEYS.includes(k)) return;
+        await _pullKey(k);
+        setSyncPill('🟢 Synced', '#7fffaa');
+        refreshAll();
+      })
+    .subscribe();
+}
+
+async function _pullKey(k) {
+  if (!_sbClient) return;
+  const { data, error } = await _sbClient.from('app_store').select('value').eq('key', k).single();
+  if (error || !data) return;
+  const v = data.value;
+  if (k === 'hyc_members')    members    = v || [];
+  if (k === 'hyc_tasks')      tasks      = v || [];
+  if (k === 'hyc_log')        workLog    = v || [];
+  if (k === 'hyc_activity')   activity   = v || [];
+  if (k === 'hyc_meetings')   meetings   = v || [];
+  if (k === 'hyc_attendance') attendance = v || [];
+  if (k === 'hyc_categories') { if (Array.isArray(v) && v.length) categories = v; }
+  if (k === 'hyc_fees')       fees      = v || [];
+  if (k === 'hyc_fee_types')  { if (Array.isArray(v) && v.length) feeTypes = v; }
+  if (k === 'hyc_events')            events           = v || [];
+  if (k === 'hyc_event_attendance')  eventAttendance  = v || [];
+  if (k === 'hyc_chits')             chitTransactions = v || [];
+  STORE.save(k, v);
+}
+
+async function loadAllFromSupabase() {
+  if (!_sbClient) return false;
+  setSyncPill('⏳ Syncing…', 'rgba(255,255,255,0.5)');
+  const { data, error } = await _sbClient.from('app_store').select('*').in('key', SB_KEYS);
+  if (error) { setSyncPill('🔴 Load Error', '#ff8a8a'); return false; }
+
+  const cloudKeys = new Set((data || []).map(r => r.key));
+
+  // For each key: if cloud has data → use cloud; if cloud missing key → push local up
+  for (const row of (data || [])) {
+    const v = row.value;
+    // Only override local data if the cloud actually has records
+    if (!Array.isArray(v) || v.length === 0) continue;
+    if (row.key === 'hyc_members')    members    = v;
+    if (row.key === 'hyc_tasks')      tasks      = v;
+    if (row.key === 'hyc_log')        workLog    = v;
+    if (row.key === 'hyc_activity')   activity   = v;
+    if (row.key === 'hyc_meetings')   meetings   = v;
+    if (row.key === 'hyc_attendance') attendance = v;
+    if (row.key === 'hyc_categories') categories = v;
+    if (row.key === 'hyc_fees')       fees       = v;
+    if (row.key === 'hyc_fee_types')  feeTypes   = v;
+    if (row.key === 'hyc_events')            events           = v;
+    if (row.key === 'hyc_event_attendance')  eventAttendance  = v;
+    if (row.key === 'hyc_chits')             chitTransactions = v;
+    // Always write through to localStorage so next load is instant
+    localStorage.setItem(row.key, JSON.stringify(v));
+  }
+
+  // First-time sync: push any local data not yet in Supabase
+  const localSnapshot = {
+    'hyc_members':    members,
+    'hyc_tasks':      tasks,
+    'hyc_log':        workLog,
+    'hyc_activity':   activity,
+    'hyc_meetings':   meetings,
+    'hyc_attendance': attendance,
+    'hyc_categories': categories,
+    'hyc_fees':       fees,
+    'hyc_fee_types':  feeTypes,
+    'hyc_events':           events,
+    'hyc_event_attendance': eventAttendance,
+    'hyc_chits':            chitTransactions,
+  };
+  for (const [key, val] of Object.entries(localSnapshot)) {
+    if (!cloudKeys.has(key) && val.length > 0) _pushToSupabase(key, val);
+  }
+
+  setSyncPill('🟢 Synced', '#7fffaa');
+  return true;
+}
+
+function _pushToSupabase(key, value) {
+  if (!_sbClient) return;
+  _sbClient.from('app_store')
+    .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+    .then(({ error }) => {
+      if (error) setSyncPill('⚠ Sync Error', '#ffd166');
+      else setSyncPill('🟢 Synced', '#7fffaa');
+    });
+}
+
+function setSyncPill(text, color) {
+  // Header pill
+  const el = document.getElementById('sync-pill');
+  if (el) {
+    el.style.display = (text ? '' : 'none');
+    el.textContent = text;
+    el.style.color = color;
+    el.style.borderColor = color;
+    el.style.background = 'rgba(0,0,0,0.3)';
+  }
+  // Login overlay status
+  const ls = document.getElementById('login-sync-status');
+  if (ls) {
+    ls.style.color = color;
+    ls.style.fontSize = '0.78rem';
+    ls.textContent = text ? `Cloud sync: ${text}` : '';
+  }
+}
+
+async function saveSyncConfig() {
+  const url = document.getElementById('sb-url').value.trim();
+  const key = document.getElementById('sb-key').value.trim();
+  const st  = document.getElementById('sync-status-text');
+  if (!url || !key) { st.style.color='#ff8a8a'; st.textContent='URL and key are required.'; return; }
+  st.style.color='rgba(255,255,255,0.5)'; st.textContent='Connecting…';
+  localStorage.setItem(SB_CFG_KEY, JSON.stringify({ url, key }));
+  const ok = await initSupabase(url, key);
+  if (!ok) { st.style.color='#ff8a8a'; st.textContent='Connection failed. Check your URL and key.'; return; }
+  const loaded = await loadAllFromSupabase();
+  if (loaded) {
+    st.style.color='#7fffaa'; st.textContent='✓ Connected! Data loaded from cloud.';
+    refreshAll();
+  }
+}
+
+function embedSyncConfig() {
+  const url = document.getElementById('sb-url').value.trim();
+  const key = document.getElementById('sb-key').value.trim();
+  if (!url || !key) { alert('Connect & Sync first so the credentials are filled in.'); return; }
+  const snippet = `const SUPABASE_URL = '${url}';\nconst SUPABASE_KEY = '${key}';`;
+  document.getElementById('embed-snippet').textContent = snippet;
+  document.getElementById('embed-instructions').style.display = '';
+  document.getElementById('embed-copy-status').textContent = '';
+}
+
+function copyEmbedSnippet() {
+  const text = document.getElementById('embed-snippet').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const st = document.getElementById('embed-copy-status');
+    st.style.color = '#7fffaa'; st.textContent = '✓ Copied!';
+    setTimeout(() => { st.textContent = ''; }, 2500);
+  });
+}
+
+function clearSyncConfig() {
+  if (!confirm('Disconnect cloud sync? App will use local storage only.')) return;
+  localStorage.removeItem(SB_CFG_KEY);
+  if (_sbChannel) { _sbChannel.unsubscribe(); _sbChannel = null; }
+  _sbClient = null;
+  setSyncPill('', '');
+  document.getElementById('sync-status-text').textContent = 'Disconnected.';
+  document.getElementById('sb-url').value = '';
+  document.getElementById('sb-key').value = '';
+}
+
+// save() already handles Supabase pushes — defined near the top of the script
+
+// ── Events ─────────────────────────────────────────────────────────────────
+
+function populateEventSelect(id, selectedVal) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const cur = selectedVal !== undefined ? selectedVal : el.value;
+  const sorted = [...events].sort((a,b) => b.date.localeCompare(a.date));
+  el.innerHTML = '<option value="">— None —</option>' +
+    sorted.map(e => `<option value="${e.id}"${e.id===cur?' selected':''}>${e.title} (${fmtDate(e.date)})</option>`).join('');
+}
+
+function addNewEvent() {
+  const title    = document.getElementById('ev-title').value.trim();
+  const date     = document.getElementById('ev-date').value;
+  const type     = document.getElementById('ev-type').value;
+  const location = document.getElementById('ev-location').value.trim();
+  const cost     = parseFloat(document.getElementById('ev-cost').value) || 0;
+  const feeType  = document.getElementById('ev-fee-type').value;
+  const desc     = document.getElementById('ev-desc').value.trim();
+  if (!title || !date) { alert('Title and date are required.'); return; }
+  events.push({ id: uid(), title, date, type, location, cost, feeType, desc });
+  pushActivity('🎉', `Event created: "${title}" on ${fmtDate(date)}`);
+  document.getElementById('ev-title').value    = '';
+  document.getElementById('ev-location').value = '';
+  document.getElementById('ev-cost').value     = '';
+  document.getElementById('ev-desc').value     = '';
+  save(); populateFeeSelects(); renderEvents();
+}
+
+function deleteEvent(id) {
+  const e = events.find(x => x.id === id);
+  if (!e || !confirm(`Delete "${e.title}"? Fee links will be removed.`)) return;
+  fees.forEach(f => { if (f.eventId === id) f.eventId = ''; });
+  eventAttendance = eventAttendance.filter(a => a.eventId !== id);
+  events = events.filter(x => x.id !== id);
+  pushActivity('🗑️', `Deleted event: "${e.title}"`);
+  save(); populateFeeSelects(); renderEvents(); renderFees();
+}
+
+function renderEvents() {
+  const filter   = document.getElementById('ev-filter')?.value || 'upcoming';
+  const todayStr = today();
+  let list = [...events].sort((a,b) => a.date.localeCompare(b.date));
+  if (filter === 'upcoming') list = list.filter(e => e.date >= todayStr);
+  if (filter === 'past')     list = list.filter(e => e.date <  todayStr);
+
+  const el = document.getElementById('events-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">🎉</div>No events found.</div>';
+    return;
+  }
+  el.innerHTML = list.map(ev => {
+    const isPast    = ev.date < todayStr;
+    const isToday   = ev.date === todayStr;
+    const dateLbl   = isToday ? `<span style="color:#7fffaa;font-weight:600;">Today</span>` : fmtDate(ev.date);
+    const collected = fees.filter(f => f.eventId === ev.id).reduce((s,f) => s+(f.amount||0), 0);
+    const feeCount  = fees.filter(f => f.eventId === ev.id).length;
+    const attCount  = eventAttendance.filter(a => a.eventId === ev.id).length;
+    const hasCost   = ev.cost > 0;
+    const mySignedIn = session?.memberId && eventAttendance.some(a => a.eventId === ev.id && a.memberId === session.memberId);
+    const signInBtn = session && !isAdmin()
+      ? mySignedIn
+        ? `<button class="btn btn-ghost btn-sm" disabled style="opacity:0.5;">✓ Signed In</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="signInToEventCard('${ev.id}', this)">✋ Sign In</button>`
+      : '';
+    return `
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.07);flex-wrap:wrap;">
+      <div style="flex:1;min-width:200px;">
+        <div style="font-weight:600;font-size:1rem;">${ev.title}
+          ${ev.type ? `<span style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-left:6px;">${ev.type}</span>` : ''}
+        </div>
+        <div style="font-size:0.78rem;color:rgba(255,255,255,0.45);margin-top:3px;">
+          ${dateLbl}${ev.location ? ' · ' + ev.location : ''}${ev.desc ? ' · ' + ev.desc : ''}
+        </div>
+        <div style="font-size:0.8rem;margin-top:4px;display:flex;gap:14px;flex-wrap:wrap;">
+          <span style="color:rgba(255,255,255,0.45);">✋ ${attCount} attended</span>
+          ${hasCost ? `<span style="color:var(--gold-light);">Fee: <strong>$${ev.cost.toFixed(2)}</strong>${ev.feeType ? ' · '+ev.feeType : ''}</span>
+            <span style="color:rgba(255,255,255,0.45);">Collected: <strong>$${collected.toFixed(2)}</strong> (${feeCount})</span>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
+        ${signInBtn}
+        <button class="btn btn-ghost btn-sm" onclick="openEventFees('${ev.id}')">📋 Detail</button>
+        <button class="btn btn-ghost btn-sm admin-only" onclick="openEditEvent('${ev.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm admin-only" onclick="deleteEvent('${ev.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openEditEvent(id) {
+  const e = events.find(x => x.id === id); if (!e) return;
+  document.getElementById('ee-id').value       = id;
+  document.getElementById('ee-title').value    = e.title;
+  document.getElementById('ee-date').value     = e.date;
+  document.getElementById('ee-type').value     = e.type || '';
+  document.getElementById('ee-location').value = e.location || '';
+  document.getElementById('ee-cost').value     = e.cost || '';
+  document.getElementById('ee-desc').value     = e.desc || '';
+  populateFeeTypeSelect('ee-fee-type', e.feeType || '');
+  document.getElementById('edit-event-modal').classList.add('open');
+}
+
+function closeEditEvent() {
+  document.getElementById('edit-event-modal').classList.remove('open');
+}
+
+function saveEditEvent() {
+  const id = document.getElementById('ee-id').value;
+  const e  = events.find(x => x.id === id); if (!e) return;
+  e.title    = document.getElementById('ee-title').value.trim();
+  e.date     = document.getElementById('ee-date').value;
+  e.type     = document.getElementById('ee-type').value;
+  e.location = document.getElementById('ee-location').value.trim();
+  e.cost     = parseFloat(document.getElementById('ee-cost').value) || 0;
+  e.feeType  = document.getElementById('ee-fee-type').value;
+  e.desc     = document.getElementById('ee-desc').value.trim();
+  save(); closeEditEvent(); populateFeeSelects(); renderEvents();
+}
+
+let _activeEventId = null;
+
+function openEventFees(eventId) {
+  _activeEventId = eventId;
+  const e = events.find(x => x.id === eventId); if (!e) return;
+  document.getElementById('evf-title').textContent = e.title;
+  document.getElementById('evf-meta').textContent  =
+    `${fmtDate(e.date)}${e.location ? ' · '+e.location : ''}${e.type ? ' · '+e.type : ''}`;
+  // Pre-fill fee amount from event cost
+  const amtEl = document.getElementById('evf-amount');
+  if (amtEl) amtEl.value = e.cost ? e.cost.toFixed(2) : '';
+  document.getElementById('evf-date').value  = today();
+  document.getElementById('evf-notes').value = '';
+  // Member sign-in row (for logged-in non-admin members)
+  const sinRow    = document.getElementById('evf-signin-row');
+  const sinStatus = document.getElementById('evf-signin-status');
+  if (sinRow) {
+    if (isMember() && !isAdmin() && session?.memberId) {
+      const already = eventAttendance.some(a => a.eventId === eventId && a.memberId === session.memberId);
+      sinRow.style.display = '';
+      sinStatus.style.color = '#7fffaa';
+      sinStatus.textContent = already ? '✓ You are signed in' : '';
+      sinRow.querySelector('button').disabled = already;
+    } else {
+      sinRow.style.display = 'none';
+    }
+  }
+  _refreshEventModal(eventId);
+  document.getElementById('event-fees-modal').classList.add('open');
+}
+
+function _refreshEventModal(eventId) {
+  const ev = events.find(x => x.id === eventId); if (!ev) return;
+  const attList  = eventAttendance.filter(a => a.eventId === eventId);
+  const feeList  = fees.filter(f => f.eventId === eventId).sort((a,b) => b.date.localeCompare(a.date));
+  const total    = feeList.reduce((s,f) => s+(f.amount||0), 0);
+  const expected = (ev.cost||0) * attList.length;
+
+  // Summary bar
+  const sumEl = document.getElementById('evf-summary');
+  if (sumEl) {
+    const parts = [
+      `<span style="color:rgba(255,255,255,0.5);">✋ <strong style="color:#fff;">${attList.length}</strong> attended</span>`,
+      `<span style="color:var(--gold-light);">💰 Collected: <strong>$${total.toFixed(2)}</strong></span>`,
+    ];
+    if (ev.cost > 0) parts.push(
+      `<span style="color:rgba(255,255,255,0.45);">Expected: $${expected.toFixed(2)}</span>`,
+      `<span style="color:${total>=expected?'#7fffaa':'#ff8a8a'};">${total>=expected?'✓ Fully paid':'⚠ Balance due: $'+(expected-total).toFixed(2)}</span>`
+    );
+    sumEl.innerHTML = parts.join('');
+  }
+
+  // Admin fee-payment member dropdown — only unsigned-in members
+  const memEl = document.getElementById('evf-member');
+  if (memEl) memEl.innerHTML = '<option value="">— Select member —</option>' +
+    members.map(m => `<option value="${m.id}">${m.first} ${m.last}</option>`).join('');
+
+  // Admin sign-in dropdown — unsigned members only
+  const attMemEl = document.getElementById('evf-attend-member');
+  if (attMemEl) {
+    const signed = new Set(attList.map(a => a.memberId));
+    attMemEl.innerHTML = '<option value="">— Select member —</option>' +
+      members.filter(m => !signed.has(m.id))
+        .map(m => `<option value="${m.id}">${m.first} ${m.last}</option>`).join('');
+  }
+
+  // Attendance list
+  const attDiv = document.getElementById('evf-attend-list');
+  if (attDiv) {
+    if (!attList.length) {
+      attDiv.innerHTML = '<div style="color:rgba(255,255,255,0.35);">No sign-ins yet.</div>';
+    } else {
+      attDiv.innerHTML = attList.map(a => {
+        const mb   = members.find(m => m.id === a.memberId);
+        const paid = fees.some(f => f.eventId === eventId && f.memberId === a.memberId);
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+          <span>${mb ? mb.first+' '+mb.last : 'Unknown'}</span>
+          <span style="font-size:0.78rem;${paid?'color:#7fffaa':'color:#ff8a8a'};">${paid?'✓ Paid':'Unpaid'}</span>
+        </div>
+        <div class="admin-only" style="display:none;">
+          <button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:0.72rem;" onclick="removeEventSignIn('${a.id}','${eventId}')">✕</button>
+        </div>`;
+      }).join('');
+      // Show remove buttons for admins
+      if (isAdmin()) attDiv.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
+    }
+  }
+
+  // Fees list
+  const feesDiv = document.getElementById('evf-fees-list');
+  const emptyEl = document.getElementById('evf-empty');
+  if (feesDiv) {
+    if (!feeList.length) {
+      feesDiv.innerHTML = ''; if (emptyEl) emptyEl.style.display = '';
+    } else {
+      if (emptyEl) emptyEl.style.display = 'none';
+      feesDiv.innerHTML = feeList.map(f => {
+        const mb = members.find(m => m.id === f.memberId);
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);gap:8px;flex-wrap:wrap;">
+          <span>${mb ? mb.first+' '+mb.last : 'Unknown'}</span>
+          <span style="color:var(--gold-light);font-weight:600;">$${(f.amount||0).toFixed(2)}</span>
+          <span style="color:rgba(255,255,255,0.4);font-size:0.78rem;">${fmtDate(f.date)}${f.notes?' · '+f.notes:''}</span>
+          <button class="btn btn-danger btn-sm admin-only" style="padding:2px 7px;font-size:0.72rem;"
+            onclick="deleteFee('${f.id}');_refreshEventModal('${eventId}');renderEvents();renderFees();">✕</button>
+        </div>`;
+      }).join('');
+    }
+  }
+  applyPermissions();
+}
+
+function closeEventFees() {
+  document.getElementById('event-fees-modal').classList.remove('open');
+  _activeEventId = null;
+}
+
+// Member sign-in from event card (with GPS check)
+// ── Chit helpers ───────────────────────────────────────────────────────────
+
+function getMemberChitBalance(memberId) {
+  return chitTransactions
+    .filter(t => t.memberId === memberId)
+    .reduce((s, t) => s + (t.type === 'credit' ? t.amount : -t.amount), 0);
+}
+
+function addChitCredit(memberId, amount, reason) {
+  const mb = members.find(m => m.id === memberId);
+  chitTransactions.push({
+    id: uid(), memberId, amount, type: 'credit',
+    reason: reason || 'Admin credit', date: today()
+  });
+  pushActivity('💳', `Chit credit $${amount.toFixed(2)} → ${mb?.first} ${mb?.last}`);
+  save(); renderChitManager(); renderFeeBalance();
+}
+
+function addChitDebit(memberId, amount, reason, eventId) {
+  const mb = members.find(m => m.id === memberId);
+  chitTransactions.push({
+    id: uid(), memberId, amount, type: 'debit',
+    reason: reason || 'Event charge', date: today(), eventId: eventId || ''
+  });
+  pushActivity('💳', `Chit debit $${amount.toFixed(2)} ← ${mb?.first} ${mb?.last} (${reason})`);
+  save(); renderChitManager(); renderFeeBalance();
+}
+
+function renderChitManager() {
+  const el = document.getElementById('chit-manager-list');
+  if (!el) return;
+  const rows = members.map(m => {
+    const bal = getMemberChitBalance(m.id);
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.07);flex-wrap:wrap;">
+      <div style="flex:1;min-width:140px;font-weight:600;">${m.first} ${m.last}
+        <span style="font-size:0.78rem;color:rgba(255,255,255,0.4);margin-left:6px;">${m.role||''}</span>
+      </div>
+      <div style="min-width:90px;font-weight:700;font-size:1rem;${bal<0?'color:#ff8a8a':bal>0?'color:#7fffaa':'color:rgba(255,255,255,0.4)'};">
+        $${bal.toFixed(2)}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <input type="number" min="0.01" step="0.01" placeholder="Amount"
+          id="chit-amt-${m.id}" style="width:90px;font-size:0.82rem;padding:4px 8px;" />
+        <input type="text" placeholder="Reason"
+          id="chit-rsn-${m.id}" style="width:120px;font-size:0.82rem;padding:4px 8px;" />
+        <button class="btn btn-primary btn-sm" onclick="adminChitCredit('${m.id}')">+ Credit</button>
+        <button class="btn btn-danger btn-sm"  onclick="adminChitDebit('${m.id}')">− Debit</button>
+      </div>
+    </div>`;
+  }).join('');
+  el.innerHTML = rows || '<div style="color:rgba(255,255,255,0.4);">No members.</div>';
+}
+
+function adminChitCredit(memberId) {
+  const amt = parseFloat(document.getElementById(`chit-amt-${memberId}`)?.value);
+  const rsn = document.getElementById(`chit-rsn-${memberId}`)?.value.trim() || 'Admin credit';
+  if (!amt || amt <= 0) { alert('Enter a valid amount.'); return; }
+  addChitCredit(memberId, amt, rsn);
+  document.getElementById(`chit-amt-${memberId}`).value = '';
+  document.getElementById(`chit-rsn-${memberId}`).value = '';
+}
+
+function adminChitDebit(memberId) {
+  const amt = parseFloat(document.getElementById(`chit-amt-${memberId}`)?.value);
+  const rsn = document.getElementById(`chit-rsn-${memberId}`)?.value.trim() || 'Admin debit';
+  if (!amt || amt <= 0) { alert('Enter a valid amount.'); return; }
+  addChitDebit(memberId, amt, rsn);
+  document.getElementById(`chit-amt-${memberId}`).value = '';
+  document.getElementById(`chit-rsn-${memberId}`).value = '';
+}
+
+// Core: check balance and debit chits on sign-in, return {ok, msg}
+function _chitCheckAndDebit(eventId, memberId) {
+  const ev = events.find(x => x.id === eventId);
+  if (!ev || !ev.cost) return { ok: true, msg: '' };
+  const bal = getMemberChitBalance(memberId);
+  const cost = ev.cost;
+  if (bal >= cost) {
+    // Debit chits and auto-record fee payment
+    addChitDebit(memberId, cost, `${ev.title}`, eventId);
+    fees.push({
+      id: uid(), memberId, type: ev.feeType || 'Other', amount: cost,
+      date: today(), year: new Date().getFullYear(),
+      notes: 'Paid by chit', eventId
+    });
+    save();
+    return { ok: true, msg: `✓ Chit balance charged $${cost.toFixed(2)}. New balance: $${(bal - cost).toFixed(2)}` };
+  } else {
+    return {
+      ok: false,
+      msg: `Insufficient chit balance. Balance: $${bal.toFixed(2)}, needed: $${cost.toFixed(2)} (shortfall: $${(cost - bal).toFixed(2)})`,
+      bal, cost
+    };
+  }
+}
+
+function signInToEventCard(eventId, btn) {
+  if (!session?.memberId) return;
+  const geo = getGeoConfig();
+  const proceed = () => _finishCardSignIn(eventId, btn);
+  if (!geo) { proceed(); return; }
+  if (!navigator.geolocation) { alert('Location services not available.'); return; }
+  btn.textContent = '📍…'; btn.disabled = true;
+  navigator.geolocation.getCurrentPosition(pos => {
+    const dist = haversineMetres(pos.coords.latitude, pos.coords.longitude, geo.lat, geo.lng);
+    if (dist <= geo.radius) { proceed(); }
+    else {
+      btn.textContent = '✋ Sign In'; btn.disabled = false;
+      alert(`You must be at the clubhouse to sign in (you are ~${Math.round(dist)}m away).`);
+    }
+  }, () => { btn.textContent = '✋ Sign In'; btn.disabled = false; alert('Location access denied.'); },
+  { timeout: 10000, maximumAge: 60000, enableHighAccuracy: true });
+}
+
+function _finishCardSignIn(eventId, btn) {
+  const chit = _chitCheckAndDebit(eventId, session.memberId);
+  if (!chit.ok) {
+    const proceed = confirm(`${chit.msg}\n\nSign in anyway without chit payment?`);
+    if (!proceed) { btn.textContent = '✋ Sign In'; btn.disabled = false; return; }
+  }
+  _recordEventSignIn(eventId, session.memberId);
+  btn.textContent = '✓ Signed In'; btn.style.opacity = '0.5';
+  if (chit.ok && chit.msg) alert(chit.msg);
+  renderEvents(); renderFees();
+}
+
+// Member sign-in from inside the modal
+function signInToEvent() {
+  if (!session?.memberId) return;
+  const statusEl = document.getElementById('evf-signin-status');
+  const btn      = document.querySelector('#evf-signin-row button');
+  const geo = getGeoConfig();
+  if (!geo) { _completeEventSignIn(); return; }
+  if (!navigator.geolocation) { statusEl.style.color='#ff8a8a'; statusEl.textContent='Location not available.'; return; }
+  statusEl.style.color='rgba(255,255,255,0.5)'; statusEl.textContent='📍 Checking location…'; btn.disabled=true;
+  navigator.geolocation.getCurrentPosition(pos => {
+    const dist = haversineMetres(pos.coords.latitude, pos.coords.longitude, geo.lat, geo.lng);
+    if (dist <= geo.radius) { _completeEventSignIn(); }
+    else {
+      statusEl.style.color='#ff8a8a';
+      statusEl.textContent=`❌ Must be at clubhouse (~${Math.round(dist)}m away).`;
+      btn.disabled=false;
+    }
+  }, () => { statusEl.style.color='#ff8a8a'; statusEl.textContent='❌ Location denied.'; btn.disabled=false; },
+  { timeout:10000, maximumAge:60000, enableHighAccuracy:true });
+}
+
+function _completeEventSignIn() {
+  const statusEl = document.getElementById('evf-signin-status');
+  const btn      = document.querySelector('#evf-signin-row button');
+  const chit = _chitCheckAndDebit(_activeEventId, session.memberId);
+  if (!chit.ok) {
+    const proceed = confirm(`${chit.msg}\n\nSign in anyway without chit payment?`);
+    if (!proceed) { btn.disabled=false; return; }
+    statusEl.style.color='#ffd166';
+    statusEl.textContent=`⚠ Signed in — balance insufficient ($${chit.bal.toFixed(2)} / $${chit.cost.toFixed(2)})`;
+  } else {
+    statusEl.style.color='#7fffaa';
+    statusEl.textContent = chit.msg || '✓ You are signed in';
+  }
+  _recordEventSignIn(_activeEventId, session.memberId);
+  btn.disabled=true;
+  _refreshEventModal(_activeEventId); renderEvents(); renderFees();
+}
+
+function _recordEventSignIn(eventId, memberId) {
+  if (!memberId) return;
+  if (eventAttendance.some(a => a.eventId===eventId && a.memberId===memberId)) return;
+  eventAttendance.push({ id:uid(), eventId, memberId, signedInAt:new Date().toISOString() });
+  const ev = events.find(x=>x.id===eventId);
+  const mb = members.find(x=>x.id===memberId);
+  pushActivity('✋',`${mb?.first} ${mb?.last} signed in to "${ev?.title}"`);
+  save();
+}
+
+function adminSignInToEvent() {
+  const memberId = document.getElementById('evf-attend-member').value;
+  if (!memberId) { alert('Select a member.'); return; }
+  if (eventAttendance.some(a => a.eventId===_activeEventId && a.memberId===memberId)) return;
+  const chit = _chitCheckAndDebit(_activeEventId, memberId);
+  _recordEventSignIn(_activeEventId, memberId);
+  const mb  = members.find(x=>x.id===memberId);
+  const bal = getMemberChitBalance(memberId);
+  if (!chit.ok) {
+    alert(`⚠ ${mb?.first} ${mb?.last} signed in but chit balance insufficient.\nBalance: $${chit.bal.toFixed(2)}, needed: $${chit.cost.toFixed(2)}`);
+  }
+  save(); _refreshEventModal(_activeEventId); renderEvents(); renderFees();
+}
+
+function removeEventSignIn(id, eventId) {
+  eventAttendance = eventAttendance.filter(a => a.id !== id);
+  save(); _refreshEventModal(eventId); renderEvents(); renderFees();
+}
+
+function addFeeFromEvent() {
+  const memberId = document.getElementById('evf-member').value;
+  const amount   = parseFloat(document.getElementById('evf-amount').value);
+  const date     = document.getElementById('evf-date').value;
+  const notes    = document.getElementById('evf-notes').value.trim();
+  const ev       = events.find(x => x.id === _activeEventId);
+  if (!memberId || isNaN(amount) || !date) { alert('Member, amount and date are required.'); return; }
+  const mb = members.find(m => m.id === memberId);
+  fees.push({ id:uid(), memberId, type:ev?.feeType||'Other', amount, date,
+    year:new Date(date).getFullYear(), notes, eventId:_activeEventId });
+  pushActivity('💰',`Fee recorded: ${mb?.first} ${mb?.last} — ${ev?.title} $${amount.toFixed(2)}`);
+  document.getElementById('evf-member').value = '';
+  document.getElementById('evf-notes').value  = '';
+  save(); populateFeeSelects(); _refreshEventModal(_activeEventId); renderEvents(); renderFees();
+}
+
+// ── Fees ───────────────────────────────────────────────────────────────────
+
+function populateFeeTypeSelect(id, selectedVal) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const cur = selectedVal !== undefined ? selectedVal : el.value;
+  el.innerHTML = '<option value="">— Select —</option>' +
+    feeTypes.map(t => `<option${t === cur ? ' selected' : ''}>${t}</option>`).join('');
+}
+
+function renderFeeTypeManager() {
+  const list = document.getElementById('fee-types-list');
+  if (!list) return;
+  list.innerHTML = feeTypes.map((t, i) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <input type="text" value="${t.replace(/"/g,'&quot;')}" data-fi="${i}"
+        style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
+               border-radius:5px;padding:5px 8px;color:#fff;font-size:0.85rem;"
+        onchange="renameFeeType(${i}, this.value)" />
+      <button class="btn btn-danger btn-sm" onclick="deleteFeeType(${i})">✕</button>
+    </div>`).join('');
+}
+
+function addFeeType() {
+  const inp = document.getElementById('new-fee-type-input');
+  const name = inp.value.trim();
+  if (!name) return;
+  if (feeTypes.includes(name)) { alert('Fee type already exists.'); return; }
+  feeTypes.push(name);
+  inp.value = '';
+  save(); populateFeeSelects(); renderFeeTypeManager();
+}
+
+function renameFeeType(idx, newName) {
+  newName = newName.trim();
+  if (!newName) { renderFeeTypeManager(); return; }
+  if (feeTypes.includes(newName) && feeTypes[idx] !== newName) {
+    alert('Fee type already exists.'); renderFeeTypeManager(); return;
+  }
+  const old = feeTypes[idx];
+  feeTypes[idx] = newName;
+  fees.forEach(f => { if (f.type === old) f.type = newName; });
+  save(); populateFeeSelects(); renderFeeTypeManager(); renderFees();
+}
+
+function deleteFeeType(idx) {
+  const name = feeTypes[idx];
+  const inUse = fees.filter(f => f.type === name).length;
+  if (inUse && !confirm(`"${name}" is used in ${inUse} record(s). Delete anyway?`)) return;
+  feeTypes.splice(idx, 1);
+  save(); populateFeeSelects(); renderFeeTypeManager();
+}
+
+function populateFeeSelects() {
+  ['fee-type','ef-type','ev-fee-type','ee-fee-type'].forEach(id => populateFeeTypeSelect(id));
+  // Filter dropdowns
+  const fm = document.getElementById('fee-filter-member');
+  const ft = document.getElementById('fee-filter-type');
+  const fy = document.getElementById('fee-filter-year');
+  if (fm) {
+    const cur = fm.value;
+    fm.innerHTML = '<option value="">All Members</option>' +
+      members.map(m => `<option value="${m.id}"${m.id===cur?' selected':''}>${m.first} ${m.last}</option>`).join('');
+  }
+  if (ft) {
+    const cur = ft.value;
+    ft.innerHTML = '<option value="">All Types</option>' +
+      feeTypes.map(t => `<option${t===cur?' selected':''}>${t}</option>`).join('');
+  }
+  if (fy) {
+    const cur = fy.value;
+    const years = [...new Set(fees.map(f => f.year).filter(Boolean))].sort((a,b) => b-a);
+    fy.innerHTML = '<option value="">All Years</option>' +
+      years.map(y => `<option${y==cur?' selected':''}>${y}</option>`).join('');
+  }
+  // Event filter in fees tab
+  const fe = document.getElementById('fee-filter-event');
+  if (fe) {
+    const cur = fe.value;
+    const sorted = [...events].sort((a,b) => b.date.localeCompare(a.date));
+    fe.innerHTML = '<option value="">All Events</option>' +
+      sorted.map(e => `<option value="${e.id}"${e.id===cur?' selected':''}>${e.title}</option>`).join('');
+  }
+  // Event dropdowns in add-fee and edit-fee forms
+  ['fee-event','ef-event'].forEach(id => populateEventSelect(id));
+  // Add fee member select
+  const fm2 = document.getElementById('fee-member');
+  if (fm2) {
+    const cur = fm2.value;
+    fm2.innerHTML = '<option value="">— Select —</option>' +
+      members.map(m => `<option value="${m.id}"${m.id===cur?' selected':''}>${m.first} ${m.last}</option>`).join('');
+  }
+  const em = document.getElementById('ef-member');
+  if (em) {
+    const cur = em.value;
+    em.innerHTML = '<option value="">— Select —</option>' +
+      members.map(m => `<option value="${m.id}"${m.id===cur?' selected':''}>${m.first} ${m.last}</option>`).join('');
+  }
+}
+
+function onFeeEventChange() {
+  const eventId = document.getElementById('fee-event').value;
+  if (!eventId) return;
+  const ev = events.find(e => e.id === eventId);
+  if (!ev) return;
+  // Auto-fill fee type from event
+  if (ev.feeType) {
+    const ftEl = document.getElementById('fee-type');
+    if (ftEl) ftEl.value = ev.feeType;
+  }
+  // Auto-fill amount from event cost
+  if (ev.cost) {
+    const amtEl = document.getElementById('fee-amount');
+    if (amtEl && !amtEl.value) amtEl.value = ev.cost.toFixed(2);
+  }
+}
+
+function addFee() {
+  const memberId = document.getElementById('fee-member').value;
+  const type     = document.getElementById('fee-type').value;
+  const amount   = parseFloat(document.getElementById('fee-amount').value);
+  const date     = document.getElementById('fee-date').value;
+  const year     = parseInt(document.getElementById('fee-year').value, 10) || new Date().getFullYear();
+  const notes    = document.getElementById('fee-notes').value.trim();
+  const eventId  = document.getElementById('fee-event')?.value || '';
+  if (!memberId || !type || isNaN(amount) || !date) {
+    alert('Member, fee type, amount and date are required.'); return;
+  }
+  const mb = members.find(m => m.id === memberId);
+  fees.push({ id: uid(), memberId, type, amount, date, year, notes, eventId });
+  pushActivity('💰', `Fee recorded: ${mb?.first} ${mb?.last} — ${type} $${amount.toFixed(2)}`);
+  document.getElementById('fee-amount').value = '';
+  document.getElementById('fee-notes').value  = '';
+  document.getElementById('fee-event').value  = '';
+  save(); populateFeeSelects(); renderFees();
+}
+
+function renderFeeBalance() {
+  const card = document.getElementById('fee-balance-card');
+  const body = document.getElementById('fee-balance-body');
+  if (!card || !body) return;
+
+  // Only show when a member (or admin viewing as member) is logged in
+  if (!session?.memberId) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const mid = session.memberId;
+  const myFees = fees.filter(f => f.memberId === mid);
+
+  // Paid totals by year
+  const byYear = {};
+  myFees.forEach(f => {
+    const y = f.year || '—';
+    byYear[y] = (byYear[y] || 0) + (f.amount || 0);
+  });
+  const totalPaid = myFees.reduce((s, f) => s + (f.amount || 0), 0);
+
+  // Outstanding = events member signed in to with a cost but no payment recorded
+  const attended = new Set(eventAttendance.filter(a => a.memberId === mid).map(a => a.eventId));
+  const outstanding = events.filter(ev => {
+    if (!ev.cost || !attended.has(ev.id)) return false;
+    return !fees.some(f => f.memberId === mid && f.eventId === ev.id);
+  }).sort((a, b) => a.date.localeCompare(b.date));
+
+  const outstandingTotal = outstanding.reduce((s, ev) => s + (ev.cost || 0), 0);
+
+  const yearRows = Object.entries(byYear)
+    .sort((a, b) => String(b[0]).localeCompare(String(a[0])))
+    .map(([y, amt]) => `
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+        <span style="color:rgba(255,255,255,0.6);">${y}</span>
+        <span style="color:var(--gold-light);font-weight:600;">$${amt.toFixed(2)}</span>
+      </div>`).join('');
+
+  const outRows = outstanding.map(ev => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+      <span style="color:rgba(255,255,255,0.7);">🎉 ${ev.title}
+        <span style="font-size:0.78rem;color:rgba(255,255,255,0.35);margin-left:6px;">${fmtDate(ev.date)}</span>
+      </span>
+      <span style="color:#ff8a8a;font-weight:600;">$${ev.cost.toFixed(2)}</span>
+    </div>`).join('');
+
+  body.innerHTML = `
+    <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:18px;">
+      <div style="text-align:center;">
+        <div style="font-size:1.6rem;font-weight:700;color:var(--gold-light);">$${totalPaid.toFixed(2)}</div>
+        <div style="font-size:0.78rem;color:rgba(255,255,255,0.4);">Total Paid</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:1.6rem;font-weight:700;color:${outstandingTotal > 0 ? '#ff8a8a' : '#7fffaa'};">$${outstandingTotal.toFixed(2)}</div>
+        <div style="font-size:0.78rem;color:rgba(255,255,255,0.4);">Outstanding</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:1.6rem;font-weight:700;color:#fff;">${myFees.length}</div>
+        <div style="font-size:0.78rem;color:rgba(255,255,255,0.4);">Payments</div>
+      </div>
+      <div style="text-align:center;border-left:1px solid rgba(255,255,255,0.1);padding-left:24px;">
+        ${(()=>{ const cb = getMemberChitBalance(mid); return `
+        <div style="font-size:1.6rem;font-weight:700;color:${cb<0?'#ff8a8a':cb>0?'#7fffaa':'rgba(255,255,255,0.4)'};">$${cb.toFixed(2)}</div>
+        <div style="font-size:0.78rem;color:rgba(255,255,255,0.4);">💳 Chit Balance</div>`; })()}
+      </div>
+    </div>
+    ${yearRows ? `<div style="margin-bottom:14px;">
+      <div style="font-size:0.8rem;color:var(--gold-light);margin-bottom:6px;font-weight:600;">Paid by Year</div>
+      ${yearRows}
+    </div>` : ''}
+    ${outRows ? `<div>
+      <div style="font-size:0.8rem;color:#ff8a8a;margin-bottom:6px;font-weight:600;">Outstanding Event Fees</div>
+      ${outRows}
+    </div>` : '<div style="font-size:0.85rem;color:#7fffaa;">✓ No outstanding event fees.</div>'}`;
+}
+
+function renderFees() {
+  renderFeeBalance();
+  const filterMember = document.getElementById('fee-filter-member')?.value || '';
+  const filterType   = document.getElementById('fee-filter-type')?.value   || '';
+  const filterYear   = document.getElementById('fee-filter-year')?.value   || '';
+  const filterEvent  = document.getElementById('fee-filter-event')?.value  || '';
+
+  let list = [...fees].sort((a,b) => b.date.localeCompare(a.date));
+  if (filterMember) list = list.filter(f => f.memberId === filterMember);
+  if (filterType)   list = list.filter(f => f.type === filterType);
+  if (filterYear)   list = list.filter(f => String(f.year) === String(filterYear));
+  if (filterEvent)  list = list.filter(f => f.eventId === filterEvent);
+
+  // Members see only their own fees
+  if (isMember() && !isAdmin()) list = list.filter(f => f.memberId === session?.memberId);
+
+  const tbody  = document.getElementById('fees-tbody');
+  const empty  = document.getElementById('fees-empty');
+  const table  = document.getElementById('fees-table');
+  const summary = document.getElementById('fee-summary');
+
+  if (!list.length) {
+    tbody.innerHTML = ''; table.style.display = 'none'; empty.style.display = '';
+    if (summary) summary.innerHTML = '';
+    return;
+  }
+  table.style.display = ''; empty.style.display = 'none';
+
+  const total = list.reduce((s, f) => s + (f.amount || 0), 0);
+  if (summary) {
+    summary.innerHTML = `
+      <span style="color:var(--gold-light);">Total: <strong>$${total.toFixed(2)}</strong></span>
+      <span style="color:rgba(255,255,255,0.4);">${list.length} record${list.length!==1?'s':''}</span>`;
+  }
+
+  tbody.innerHTML = list.map(f => {
+    const mb  = members.find(m => m.id === f.memberId);
+    const ev  = f.eventId ? events.find(e => e.id === f.eventId) : null;
+    const name = mb ? `${mb.first} ${mb.last}` : 'Unknown';
+    return `<tr>
+      <td class="admin-only"><strong>${name}</strong></td>
+      <td>${f.type}</td>
+      <td style="color:var(--gold-light);font-weight:600;">$${(f.amount||0).toFixed(2)}</td>
+      <td>${fmtDate(f.date)}</td>
+      <td>${f.year || ''}</td>
+      <td style="font-size:0.82rem;">${ev ? `<span style="color:var(--gold-light);">🎉</span> ${ev.title}` : ''}</td>
+      <td style="color:rgba(255,255,255,0.5);font-size:0.82rem;">${f.notes || ''}</td>
+      <td class="admin-only" style="white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick="openEditFee('${f.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteFee('${f.id}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function deleteFee(id) {
+  if (!confirm('Delete this fee record?')) return;
+  fees = fees.filter(f => f.id !== id);
+  save(); populateFeeSelects(); renderFees();
+}
+
+function openEditFee(id) {
+  const f = fees.find(x => x.id === id); if (!f) return;
+  document.getElementById('ef-id').value     = id;
+  document.getElementById('ef-amount').value = f.amount;
+  document.getElementById('ef-date').value   = f.date;
+  document.getElementById('ef-year').value   = f.year || '';
+  document.getElementById('ef-notes').value  = f.notes || '';
+  populateFeeTypeSelect('ef-type', f.type);
+  populateEventSelect('ef-event', f.eventId || '');
+  const em = document.getElementById('ef-member');
+  if (em) {
+    em.innerHTML = '<option value="">— Select —</option>' +
+      members.map(m => `<option value="${m.id}"${m.id===f.memberId?' selected':''}>${m.first} ${m.last}</option>`).join('');
+  }
+  document.getElementById('edit-fee-modal').classList.add('open');
+}
+
+function closeEditFee() {
+  document.getElementById('edit-fee-modal').classList.remove('open');
+}
+
+function saveEditFee() {
+  const id     = document.getElementById('ef-id').value;
+  const f      = fees.find(x => x.id === id); if (!f) return;
+  f.memberId   = document.getElementById('ef-member').value;
+  f.type       = document.getElementById('ef-type').value;
+  f.amount     = parseFloat(document.getElementById('ef-amount').value) || 0;
+  f.date       = document.getElementById('ef-date').value;
+  f.year       = parseInt(document.getElementById('ef-year').value, 10) || new Date().getFullYear();
+  f.notes      = document.getElementById('ef-notes').value.trim();
+  f.eventId    = document.getElementById('ef-event').value || '';
+  save(); closeEditFee(); populateFeeSelects(); renderFees(); renderEvents();
+}
+
+function exportFees() {
+  const filterMember = document.getElementById('fee-filter-member')?.value || '';
+  const filterType   = document.getElementById('fee-filter-type')?.value   || '';
+  const filterYear   = document.getElementById('fee-filter-year')?.value   || '';
+  let list = [...fees].sort((a,b) => b.date.localeCompare(a.date));
+  if (filterMember) list = list.filter(f => f.memberId === filterMember);
+  if (filterType)   list = list.filter(f => f.type === filterType);
+  if (filterYear)   list = list.filter(f => String(f.year) === String(filterYear));
+  const rows = [['Member','Fee Type','Amount','Date Paid','Year','Notes'],
+    ...list.map(f => {
+      const mb = members.find(m => m.id === f.memberId);
+      return [`${mb?.first||''} ${mb?.last||''}`, f.type, f.amount, f.date, f.year, f.notes||''];
+    })];
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'hyc-fees.csv';
+  a.click();
+}
+
+// ── Meetings ───────────────────────────────────────────────────────────────
+
+let meetings   = STORE.load('hyc_meetings');
+let attendance = STORE.load('hyc_attendance');
+
+function saveMeetings() {
+  STORE.save('hyc_meetings',   meetings);
+  STORE.save('hyc_attendance', attendance);
+  if (_sbClient) {
+    _pushToSupabase('hyc_meetings',   meetings);
+    _pushToSupabase('hyc_attendance', attendance);
+  }
+}
+
+let _activeMeetingId = null;
+
+function createMeeting() {
+  const title = document.getElementById('mtg-title').value.trim();
+  const date  = document.getElementById('mtg-date').value;
+  if (!title || !date) { alert('Title and date are required.'); return; }
+  const m = {
+    id:       uid(),
+    title,
+    date,
+    location: document.getElementById('mtg-location').value.trim(),
+    notes:    document.getElementById('mtg-notes').value.trim(),
+    created:  new Date().toISOString(),
+  };
+  meetings.push(m);
+  pushActivity('📅', `Meeting created: "${title}" on ${fmtDate(date)}`);
+  save(); saveMeetings();
+  ['mtg-title','mtg-date','mtg-location','mtg-notes'].forEach(id => document.getElementById(id).value = '');
+  renderMeetings();
+}
+
+function deleteMeeting(id) {
+  const m = meetings.find(x => x.id === id);
+  if (!m || !confirm(`Delete "${m.title}"? All sign-ins will be removed.`)) return;
+  meetings   = meetings.filter(x => x.id !== id);
+  attendance = attendance.filter(x => x.meetingId !== id);
+  pushActivity('🗑️', `Deleted meeting: "${m.title}"`);
+  save(); saveMeetings(); renderMeetings();
+}
+
+// ── Logo helpers ────────────────────────────────────────────────────────────
+const LOGO_KEY  = 'hyc_logo';
+const LOGO_FILE = 'logo.png'; // place this file alongside index.html to use it
+
+function _setLogoSrc(src) {
+  ['app-logo', 'login-logo', 'logo-preview'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (src) {
+      el.innerHTML = `<img src="${src}" alt="Club Logo" />`;
+      el.style.background = 'transparent';
+    } else {
+      el.innerHTML = '<span>⚓</span>';
+      el.style.background = '';
+    }
+  });
+}
+
+function applyLogo() {
+  // 1. Try logo.png hosted alongside index.html
+  const img = new Image();
+  img.onload = () => _setLogoSrc(LOGO_FILE);
+  img.onerror = () => {
+    // 2. Fall back to localStorage upload
+    const dataUrl = localStorage.getItem(LOGO_KEY);
+    _setLogoSrc(dataUrl || null);
+  };
+  img.src = LOGO_FILE + '?_=' + Date.now(); // cache-bust so onerror fires reliably
+}
+
+function handleLogoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const st = document.getElementById('logo-status');
+  const fn = document.getElementById('logo-filename');
+  fn.textContent = file.name;
+  // Warn if file is large
+  if (file.size > 500 * 1024) {
+    st.style.color = '#ffd166';
+    st.textContent = '⚠ Image is large — consider using a smaller file (< 500 KB).';
+  } else {
+    st.textContent = '';
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    localStorage.setItem(LOGO_KEY, e.target.result);
+    applyLogo();
+    st.style.color = '#7fffaa';
+    st.textContent = '✓ Logo saved.';
+    setTimeout(() => { if (st.textContent === '✓ Logo saved.') st.textContent = ''; }, 3000);
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeLogo() {
+  localStorage.removeItem(LOGO_KEY);
+  document.getElementById('logo-file-input').value = '';
+  document.getElementById('logo-filename').textContent = '';
+  applyLogo();
+  const st = document.getElementById('logo-status');
+  st.style.color = 'rgba(255,255,255,0.5)';
+  st.textContent = 'Logo removed.';
+  setTimeout(() => { st.textContent = ''; }, 3000);
+}
+
+// ── Geolocation helpers ────────────────────────────────────────────────────
+const GEO_CFG_KEY = 'hyc_geo_config';
+
+function getGeoConfig() {
+  try { return JSON.parse(localStorage.getItem(GEO_CFG_KEY)) || null; } catch { return null; }
+}
+
+function saveGeoConfig() {
+  const lat    = parseFloat(document.getElementById('geo-lat').value);
+  const lng    = parseFloat(document.getElementById('geo-lng').value);
+  const radius = parseInt(document.getElementById('geo-radius').value, 10) || 200;
+  const st     = document.getElementById('geo-status');
+  if (isNaN(lat) || isNaN(lng)) { st.style.color='#ff8a8a'; st.textContent='Enter valid coordinates.'; return; }
+  localStorage.setItem(GEO_CFG_KEY, JSON.stringify({ lat, lng, radius }));
+  st.style.color = '#7fffaa'; st.textContent = '✓ Saved.';
+  setTimeout(() => { st.textContent = ''; }, 3000);
+}
+
+function useMyLocation() {
+  const st = document.getElementById('geo-status');
+  if (!navigator.geolocation) { st.style.color='#ff8a8a'; st.textContent='Geolocation not supported.'; return; }
+  st.style.color='rgba(255,255,255,0.5)'; st.textContent='Detecting location…';
+  navigator.geolocation.getCurrentPosition(pos => {
+    document.getElementById('geo-lat').value    = pos.coords.latitude.toFixed(6);
+    document.getElementById('geo-lng').value    = pos.coords.longitude.toFixed(6);
+    st.style.color='#7fffaa'; st.textContent=`✓ Got location (±${Math.round(pos.coords.accuracy)}m accuracy). Click Save.`;
+  }, () => { st.style.color='#ff8a8a'; st.textContent='Could not get location. Check browser permissions.'; });
+}
+
+// Haversine distance in metres between two lat/lng points
+function haversineMetres(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function renderMeetings() {
+  const filter = document.getElementById('mtg-filter')?.value || 'all';
+  const todayStr = today();
+  let list = [...meetings].sort((a,b) => b.date.localeCompare(a.date));
+  if (filter === 'upcoming') list = list.filter(m => m.date >= todayStr);
+  if (filter === 'past')     list = list.filter(m => m.date <  todayStr);
+
+  const el = document.getElementById('meetings-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">📋</div>No meetings found.</div>';
+    return;
+  }
+
+  el.innerHTML = list.map(m => {
+    const count    = attendance.filter(a => a.meetingId === m.id).length;
+    const isPast   = m.date < todayStr;
+    const isToday  = m.date === todayStr;
+    const dateLbl  = isToday ? `<span style="color:#7fffaa;font-weight:600;">Today</span>` : fmtDate(m.date);
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.07);flex-wrap:wrap;">
+      <div style="flex:1;min-width:180px;">
+        <div style="font-weight:600;">${m.title}</div>
+        <div style="font-size:0.78rem;color:rgba(255,255,255,0.45);margin-top:2px;">
+          ${dateLbl}${m.location ? ' · ' + m.location : ''}${m.notes ? ' · ' + m.notes : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+        <span style="font-size:0.82rem;color:${count?'var(--gold-light)':'rgba(255,255,255,0.35)'};">${count} signed in</span>
+        <button class="btn btn-ghost btn-sm" onclick="openAttendance('${m.id}')">
+          ${isPast ? '📋 View' : '✋ Sign In'}
+        </button>
+        <button class="btn btn-danger btn-sm admin-only" onclick="deleteMeeting('${m.id}')">Del</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openAttendance(meetingId) {
+  _activeMeetingId = meetingId;
+  const m = meetings.find(x => x.id === meetingId); if (!m) return;
+
+  document.getElementById('att-modal-title').textContent =  m.title;
+  document.getElementById('att-modal-meta').textContent  =
+    `${fmtDate(m.date)}${m.location ? ' · ' + m.location : ''}`;
+
+  // Show sign-in button for members if not already signed in
+  const alreadySigned = attendance.some(a => a.meetingId === meetingId && a.memberId === session?.memberId);
+  const signinRow = document.getElementById('att-signin-row');
+  const status    = document.getElementById('att-signed-status');
+  if (isMember()) {
+    signinRow.style.display = '';
+    status.textContent = alreadySigned ? '✓ You are signed in' : '';
+    document.querySelector('#att-signin-row .btn').disabled = alreadySigned;
+  } else {
+    signinRow.style.display = 'none';
+  }
+
+  // Admin: populate sign-in dropdown with unsigned members
+  populateAttAddMember(meetingId);
+  renderAttendanceTable(meetingId);
+  document.getElementById('attendance-modal').classList.add('open');
+}
+
+function populateAttAddMember(meetingId) {
+  const signed = new Set(attendance.filter(a => a.meetingId === meetingId).map(a => a.memberId));
+  const el = document.getElementById('att-add-member');
+  el.innerHTML = '<option value="">— Sign in a member —</option>' +
+    members.filter(m => !signed.has(m.id))
+            .map(m => `<option value="${m.id}">${m.first} ${m.last}</option>`).join('');
+}
+
+function renderAttendanceTable(meetingId) {
+  const rows = attendance.filter(a => a.meetingId === meetingId);
+  const tbody = document.getElementById('att-tbody');
+  const empty = document.getElementById('att-empty');
+
+  document.getElementById('att-count').textContent = `${rows.length} member${rows.length !== 1 ? 's' : ''} signed in`;
+
+  if (!rows.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = rows.map(a => {
+    const m    = members.find(x => x.id === a.memberId);
+    const name = m ? `${m.first} ${m.last}` : 'Unknown Member';
+    const role = m ? roleDisplay(m.role) : '';
+    const time = new Date(a.signedInAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+    return `<tr>
+      <td><strong>${name}</strong></td>
+      <td>${role}</td>
+      <td style="white-space:nowrap;color:rgba(255,255,255,0.5);font-size:0.82rem;">${time}</td>
+      <td class="admin-only"><button class="btn btn-danger btn-sm" onclick="removeSignIn('${a.id}')">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function signMyselfIn() {
+  if (!session?.memberId) return;
+  const statusEl = document.getElementById('att-signed-status');
+  const btn      = document.querySelector('#att-signin-row .btn');
+
+  // Admins bypass geo check
+  if (isAdmin()) {
+    _completeSignIn();
+    return;
+  }
+
+  const geo = getGeoConfig();
+  if (!geo) {
+    // No geo config set — allow sign-in but warn
+    _completeSignIn();
+    return;
+  }
+
+  if (!navigator.geolocation) {
+    statusEl.style.color = '#ff8a8a';
+    statusEl.textContent = '⚠ Location services not available on this device.';
+    return;
+  }
+
+  statusEl.style.color = 'rgba(255,255,255,0.5)';
+  statusEl.textContent = '📍 Checking your location…';
+  btn.disabled = true;
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const dist = haversineMetres(pos.coords.latitude, pos.coords.longitude, geo.lat, geo.lng);
+      if (dist <= geo.radius) {
+        _completeSignIn();
+      } else {
+        statusEl.style.color = '#ff8a8a';
+        statusEl.textContent = `❌ You must be at the clubhouse to sign in (you are ~${Math.round(dist)}m away).`;
+        btn.disabled = false;
+      }
+    },
+    err => {
+      statusEl.style.color = '#ff8a8a';
+      statusEl.textContent = '❌ Location access denied. Enable location permissions and try again.';
+      btn.disabled = false;
+    },
+    { timeout: 10000, maximumAge: 60000, enableHighAccuracy: true }
+  );
+}
+
+function _completeSignIn() {
+  recordSignIn(_activeMeetingId, session.memberId);
+  const statusEl = document.getElementById('att-signed-status');
+  const btn      = document.querySelector('#att-signin-row .btn');
+  statusEl.style.color = '#7fffaa';
+  statusEl.textContent = '✓ You are signed in';
+  btn.disabled = true;
+  renderAttendanceTable(_activeMeetingId);
+}
+
+function adminSignIn() {
+  const memberId = document.getElementById('att-add-member').value;
+  if (!memberId) { alert('Select a member.'); return; }
+  recordSignIn(_activeMeetingId, memberId);
+  populateAttAddMember(_activeMeetingId);
+}
+
+function recordSignIn(meetingId, memberId) {
+  if (attendance.some(a => a.meetingId === meetingId && a.memberId === memberId)) return;
+  attendance.push({ id: uid(), meetingId, memberId, signedInAt: new Date().toISOString() });
+  const m  = meetings.find(x => x.id === meetingId);
+  const mb = members.find(x => x.id === memberId);
+  pushActivity('✋', `${mb?.first} ${mb?.last} signed in to "${m?.title}"`);
+  save(); saveMeetings();
+  renderAttendanceTable(meetingId);
+  renderMeetings();
+}
+
+function removeSignIn(attendanceId) {
+  attendance = attendance.filter(x => x.id !== attendanceId);
+  saveMeetings();
+  renderAttendanceTable(_activeMeetingId);
+  populateAttAddMember(_activeMeetingId);
+  renderMeetings();
+}
+
+function closeAttendanceModal() {
+  document.getElementById('attendance-modal').classList.remove('open');
+  _activeMeetingId = null;
+}
+
+function printAttendance() { window.print(); }
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+
+const AUTH_KEY = 'hyc_session';
+const ADMIN_PW_KEY = 'hyc_admin_pw';
+
+function getAdminPw() { return localStorage.getItem(ADMIN_PW_KEY) || 'admin'; }
+
+let session = null;
+try { session = JSON.parse(sessionStorage.getItem(AUTH_KEY)); } catch {}
+
+function isAdmin()  { return session?.role === 'admin'; }
+function isMember() { return session?.role === 'member'; }
+
+function switchLoginTab(tab) {
+  document.getElementById('login-member-panel').style.display = tab === 'member' ? '' : 'none';
+  document.getElementById('login-admin-panel').style.display  = tab === 'admin'  ? '' : 'none';
+  document.querySelectorAll('.login-tab').forEach((b, i) =>
+    b.classList.toggle('active', (i === 0) === (tab === 'member'))
+  );
+  document.getElementById('login-member-error').textContent = '';
+  document.getElementById('login-admin-error').textContent  = '';
+}
+
+function populateLoginMemberSelect() {
+  const sel = document.getElementById('login-member-select');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Choose your name —</option>' +
+    members.map(m => `<option value="${m.id}">${m.first} ${m.last}</option>`).join('');
+}
+
+function loginMember() {
+  const memberId = document.getElementById('login-member-select').value;
+  const pin      = document.getElementById('login-member-pin').value;
+  const err      = document.getElementById('login-member-error');
+  if (!memberId) { err.textContent = 'Please select your name.'; return; }
+  const m = members.find(x => x.id === memberId);
+  if (!m) { err.textContent = 'Member not found.'; return; }
+  if (m.pin && m.pin !== pin) { err.textContent = 'Incorrect PIN.'; return; }
+  startSession({ role: 'member', memberId });
+}
+
+function loginAdmin() {
+  const pw  = document.getElementById('login-admin-pw').value;
+  const err = document.getElementById('login-admin-error');
+  if (pw !== getAdminPw()) { err.textContent = 'Incorrect password.'; return; }
+  startSession({ role: 'admin', memberId: null });
+}
+
+function startSession(s) {
+  session = s;
+  sessionStorage.setItem(AUTH_KEY, JSON.stringify(s));
+  document.getElementById('login-overlay').classList.add('hidden');
+  applyPermissions();
+  refreshAll();
+}
+
+function logout() {
+  session = null;
+  sessionStorage.removeItem(AUTH_KEY);
+  document.getElementById('login-admin-pw').value  = '';
+  document.getElementById('login-member-pin').value = '';
+  document.getElementById('login-member-error').textContent = '';
+  document.getElementById('login-admin-error').textContent  = '';
+  document.getElementById('login-overlay').classList.remove('hidden');
+  applyPermissions();
+}
+
+function applyPermissions() {
+  const admin = isAdmin();
+  document.body.classList.toggle('member-mode', !admin);
+
+  const chip = document.getElementById('user-chip');
+  if (session) {
+    chip.style.display = '';
+    if (admin) {
+      document.getElementById('user-avatar').textContent = '⚙';
+      document.getElementById('user-name').textContent   = 'Admin';
+      document.getElementById('user-role-lbl').textContent = 'Administrator';
+    } else {
+      const m = members.find(x => x.id === session.memberId);
+      const initials = m ? (m.first[0] + m.last[0]).toUpperCase() : '?';
+      document.getElementById('user-avatar').textContent   = initials;
+      document.getElementById('user-name').textContent     = m ? `${m.first} ${m.last}` : 'Member';
+      document.getElementById('user-role-lbl').textContent = 'Member';
+    }
+  } else {
+    chip.style.display = 'none';
+  }
+
+  // Lock member select in work log to logged-in member
+  const lMember = document.getElementById('l-member');
+  if (lMember) {
+    lMember.disabled = isMember();
+    if (isMember() && session?.memberId) lMember.value = session.memberId;
+  }
+}
+
+function changeAdminPassword() {
+  const np  = document.getElementById('admin-new-pw').value;
+  const cp  = document.getElementById('admin-confirm-pw').value;
+  const st  = document.getElementById('admin-pw-status');
+  if (!np) { st.style.color = '#ff8a8a'; st.textContent = 'Password cannot be blank.'; return; }
+  if (np !== cp) { st.style.color = '#ff8a8a'; st.textContent = 'Passwords do not match.'; return; }
+  localStorage.setItem(ADMIN_PW_KEY, np);
+  document.getElementById('admin-new-pw').value     = '';
+  document.getElementById('admin-confirm-pw').value = '';
+  st.style.color = '#7fffaa'; st.textContent = '✓ Password updated.';
+  setTimeout(() => { st.textContent = ''; }, 3000);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+
+// Fix any numeric date serials stored in existing member records
+members.forEach(m => { if (m.joined) m.joined = toDateStr(m.joined); });
+save();
+
+document.getElementById('l-date').value   = today();
+document.getElementById('mtg-date').value = today();
+document.getElementById('fee-date').value = today();
+document.getElementById('fee-year').value = new Date().getFullYear();
+document.getElementById('ev-date').value  = today();
+msCreate('ms-m-role');
+msCreate('ms-em-role');
+applyLogo(); // apply immediately so logo shows before async Supabase load
+
+// Auto-connect Supabase if credentials saved, then boot the app
+(async () => {
+  // Hardcoded constants take priority; fall back to localStorage
+  const cfg = (SUPABASE_URL && SUPABASE_KEY)
+    ? { url: SUPABASE_URL, key: SUPABASE_KEY }
+    : getSbConfig();
+
+  if (cfg?.url && cfg?.key) {
+    // Pre-fill admin settings form
+    const urlEl = document.getElementById('sb-url');
+    const keyEl = document.getElementById('sb-key');
+    if (urlEl) urlEl.value = cfg.url;
+    if (keyEl) keyEl.value = cfg.key;
+
+    // Show connecting state immediately
+    setSyncPill('⏳ Connecting…', 'rgba(255,255,255,0.5)');
+
+    try {
+      if (typeof supabase === 'undefined') throw new Error('Supabase SDK not loaded');
+      const ok = await initSupabase(cfg.url, cfg.key);
+      if (ok) {
+        await loadAllFromSupabase();
+        members.forEach(m => { if (m.joined) m.joined = toDateStr(m.joined); });
+      }
+    } catch (e) {
+      console.error('Auto-connect failed:', e);
+      setSyncPill('🔴 Offline', '#ff8a8a');
+    }
+  }
+
+  // Seed demo data ONLY if there is no real data (local OR cloud)
+  // AND no Supabase credentials are configured (so we never overwrite cloud data with demo)
+  // This must run AFTER Supabase load so cloud data is already in memory
+  const hasCreds = !!(cfg?.url && cfg?.key);
+  if (!members.length && !tasks.length && !hasCreds) {
+    const m1 = { id: uid(), first: 'Tom',   last: 'Harrington', role: 'Commodore',      email: 'tom@hyc.org',   phone: '' };
+    const m2 = { id: uid(), first: 'Susan', last: 'Kowalski',   role: 'Fleet Captain',  email: 'susan@hyc.org', phone: '' };
+    const m3 = { id: uid(), first: 'Dave',  last: 'Morales',    role: 'Dock Master',    email: 'dave@hyc.org',  phone: '' };
+    members.push(m1, m2, m3);
+
+    tasks.push(
+      { id: uid(), title: 'Inspect dock cleats & hardware',  category: 'Dock & Marina',     assignee: m3.id, priority: 'high',   due: '', status: 'active',  created: new Date().toISOString(), desc: '' },
+      { id: uid(), title: 'Repaint clubhouse trim',          category: 'Clubhouse',         assignee: m2.id, priority: 'medium', due: '', status: 'pending', created: new Date().toISOString(), desc: '' },
+      { id: uid(), title: 'Check life ring stations',        category: 'Safety & Equipment',assignee: m1.id, priority: 'high',   due: '', status: 'pending', created: new Date().toISOString(), desc: '' },
+      { id: uid(), title: 'Mow & edge club grounds',         category: 'Grounds & Landscaping', assignee: m3.id, priority: 'low', due: '', status: 'done',  created: new Date().toISOString(), desc: '' }
+    );
+
+    pushActivity('🚢', 'Hackensack Yacht Club Work Tracker initialized');
+    save();
+  }
+
+  // Show login overlay if no active session
+  if (!session) {
+    document.getElementById('login-overlay').classList.remove('hidden');
+  } else {
+    document.getElementById('login-overlay').classList.add('hidden');
+  }
+  applyPermissions();
+  refreshAll();
+})();
+
+// refreshAll() is called inside the async IIFE above after Supabase loads
+</script>
+</body>
+</html>
