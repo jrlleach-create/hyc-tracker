@@ -2697,7 +2697,7 @@ function deleteFeeType(idx) {
 }
 
 function populateFeeSelects() {
-  ['fee-type','ef-type'].forEach(id => populateFeeTypeSelect(id));
+  ['fee-type','ef-type','ev-fee-type','ee-fee-type'].forEach(id => populateFeeTypeSelect(id));
   // Filter dropdowns
   const fm = document.getElementById('fee-filter-member');
   const ft = document.getElementById('fee-filter-type');
