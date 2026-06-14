@@ -965,6 +965,16 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
       </div>
     </div>
 
+    <!-- Chit Accounts (admin only) -->
+    <div class="card admin-only">
+      <div class="card-header"><h2>💳 Chit Accounts</h2></div>
+      <p style="font-size:0.82rem;color:rgba(255,255,255,0.5);margin-bottom:14px;">
+        Chit balances are automatically debited when members sign in to events with a fee.
+        Add credits here when members top up their account.
+      </p>
+      <div id="chit-manager-list"></div>
+    </div>
+
     <!-- Fee Types (admin only) -->
     <div class="card admin-only">
       <div class="card-header"><h2>Fee Types</h2></div>
@@ -1334,6 +1344,7 @@ let fees       = STORE.load('hyc_fees');
 let feeTypes   = STORE.load('hyc_fee_types');
 let events          = STORE.load('hyc_events');
 let eventAttendance = STORE.load('hyc_event_attendance');
+let chitTransactions = STORE.load('hyc_chits');
 if (!categories.length) categories = [
   'Dock & Marina','Grounds & Landscaping','Clubhouse',
   'Fleet / Boats','Events','Safety & Equipment','Administration','Other'
@@ -1350,6 +1361,7 @@ function save() {
   STORE.save('hyc_fee_types',  feeTypes);
   STORE.save('hyc_events',          events);
   STORE.save('hyc_event_attendance', eventAttendance);
+  STORE.save('hyc_chits',           chitTransactions);
   if (_sbClient) {
     _pushToSupabase('hyc_members',    members);
     _pushToSupabase('hyc_tasks',      tasks);
@@ -1360,6 +1372,7 @@ function save() {
     _pushToSupabase('hyc_fee_types',  feeTypes);
     _pushToSupabase('hyc_events',          events);
     _pushToSupabase('hyc_event_attendance', eventAttendance);
+    _pushToSupabase('hyc_chits',           chitTransactions);
   }
 }
 
@@ -1982,6 +1995,7 @@ function refreshAll() {
   renderCategoryManager();
   populateFeeSelects();
   renderFeeTypeManager();
+  renderChitManager();
   renderFees();
   renderEvents();
   populateSelect('t-assignee', true);
@@ -2298,7 +2312,7 @@ function roleDisplay(role) {
 const SB_CFG_KEY = 'hyc_sb_config';
 let   _sbClient  = null;
 let   _sbChannel = null;
-const SB_KEYS    = ['hyc_members','hyc_tasks','hyc_log','hyc_activity','hyc_meetings','hyc_attendance','hyc_categories','hyc_fees','hyc_fee_types','hyc_events','hyc_event_attendance'];
+const SB_KEYS    = ['hyc_members','hyc_tasks','hyc_log','hyc_activity','hyc_meetings','hyc_attendance','hyc_categories','hyc_fees','hyc_fee_types','hyc_events','hyc_event_attendance','hyc_chits'];
 
 function getSbConfig() {
   try { return JSON.parse(localStorage.getItem(SB_CFG_KEY)) || null; } catch { return null; }
@@ -2350,8 +2364,9 @@ async function _pullKey(k) {
   if (k === 'hyc_categories') { if (Array.isArray(v) && v.length) categories = v; }
   if (k === 'hyc_fees')       fees      = v || [];
   if (k === 'hyc_fee_types')  { if (Array.isArray(v) && v.length) feeTypes = v; }
-  if (k === 'hyc_events')            events          = v || [];
-  if (k === 'hyc_event_attendance')  eventAttendance = v || [];
+  if (k === 'hyc_events')            events           = v || [];
+  if (k === 'hyc_event_attendance')  eventAttendance  = v || [];
+  if (k === 'hyc_chits')             chitTransactions = v || [];
   STORE.save(k, v);
 }
 
@@ -2377,8 +2392,9 @@ async function loadAllFromSupabase() {
     if (row.key === 'hyc_categories') categories = v;
     if (row.key === 'hyc_fees')       fees       = v;
     if (row.key === 'hyc_fee_types')  feeTypes   = v;
-    if (row.key === 'hyc_events')            events          = v;
-    if (row.key === 'hyc_event_attendance')  eventAttendance = v;
+    if (row.key === 'hyc_events')            events           = v;
+    if (row.key === 'hyc_event_attendance')  eventAttendance  = v;
+    if (row.key === 'hyc_chits')             chitTransactions = v;
     // Always write through to localStorage so next load is instant
     localStorage.setItem(row.key, JSON.stringify(v));
   }
@@ -2396,6 +2412,7 @@ async function loadAllFromSupabase() {
     'hyc_fee_types':  feeTypes,
     'hyc_events':           events,
     'hyc_event_attendance': eventAttendance,
+    'hyc_chits':            chitTransactions,
   };
   for (const [key, val] of Object.entries(localSnapshot)) {
     if (!cloudKeys.has(key) && val.length > 0) _pushToSupabase(key, val);
@@ -2719,24 +2736,131 @@ function closeEventFees() {
 }
 
 // Member sign-in from event card (with GPS check)
+// ── Chit helpers ───────────────────────────────────────────────────────────
+
+function getMemberChitBalance(memberId) {
+  return chitTransactions
+    .filter(t => t.memberId === memberId)
+    .reduce((s, t) => s + (t.type === 'credit' ? t.amount : -t.amount), 0);
+}
+
+function addChitCredit(memberId, amount, reason) {
+  const mb = members.find(m => m.id === memberId);
+  chitTransactions.push({
+    id: uid(), memberId, amount, type: 'credit',
+    reason: reason || 'Admin credit', date: today()
+  });
+  pushActivity('💳', `Chit credit $${amount.toFixed(2)} → ${mb?.first} ${mb?.last}`);
+  save(); renderChitManager(); renderFeeBalance();
+}
+
+function addChitDebit(memberId, amount, reason, eventId) {
+  const mb = members.find(m => m.id === memberId);
+  chitTransactions.push({
+    id: uid(), memberId, amount, type: 'debit',
+    reason: reason || 'Event charge', date: today(), eventId: eventId || ''
+  });
+  pushActivity('💳', `Chit debit $${amount.toFixed(2)} ← ${mb?.first} ${mb?.last} (${reason})`);
+  save(); renderChitManager(); renderFeeBalance();
+}
+
+function renderChitManager() {
+  const el = document.getElementById('chit-manager-list');
+  if (!el) return;
+  const rows = members.map(m => {
+    const bal = getMemberChitBalance(m.id);
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.07);flex-wrap:wrap;">
+      <div style="flex:1;min-width:140px;font-weight:600;">${m.first} ${m.last}
+        <span style="font-size:0.78rem;color:rgba(255,255,255,0.4);margin-left:6px;">${m.role||''}</span>
+      </div>
+      <div style="min-width:90px;font-weight:700;font-size:1rem;${bal<0?'color:#ff8a8a':bal>0?'color:#7fffaa':'color:rgba(255,255,255,0.4)'};">
+        $${bal.toFixed(2)}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <input type="number" min="0.01" step="0.01" placeholder="Amount"
+          id="chit-amt-${m.id}" style="width:90px;font-size:0.82rem;padding:4px 8px;" />
+        <input type="text" placeholder="Reason"
+          id="chit-rsn-${m.id}" style="width:120px;font-size:0.82rem;padding:4px 8px;" />
+        <button class="btn btn-primary btn-sm" onclick="adminChitCredit('${m.id}')">+ Credit</button>
+        <button class="btn btn-danger btn-sm"  onclick="adminChitDebit('${m.id}')">− Debit</button>
+      </div>
+    </div>`;
+  }).join('');
+  el.innerHTML = rows || '<div style="color:rgba(255,255,255,0.4);">No members.</div>';
+}
+
+function adminChitCredit(memberId) {
+  const amt = parseFloat(document.getElementById(`chit-amt-${memberId}`)?.value);
+  const rsn = document.getElementById(`chit-rsn-${memberId}`)?.value.trim() || 'Admin credit';
+  if (!amt || amt <= 0) { alert('Enter a valid amount.'); return; }
+  addChitCredit(memberId, amt, rsn);
+  document.getElementById(`chit-amt-${memberId}`).value = '';
+  document.getElementById(`chit-rsn-${memberId}`).value = '';
+}
+
+function adminChitDebit(memberId) {
+  const amt = parseFloat(document.getElementById(`chit-amt-${memberId}`)?.value);
+  const rsn = document.getElementById(`chit-rsn-${memberId}`)?.value.trim() || 'Admin debit';
+  if (!amt || amt <= 0) { alert('Enter a valid amount.'); return; }
+  addChitDebit(memberId, amt, rsn);
+  document.getElementById(`chit-amt-${memberId}`).value = '';
+  document.getElementById(`chit-rsn-${memberId}`).value = '';
+}
+
+// Core: check balance and debit chits on sign-in, return {ok, msg}
+function _chitCheckAndDebit(eventId, memberId) {
+  const ev = events.find(x => x.id === eventId);
+  if (!ev || !ev.cost) return { ok: true, msg: '' };
+  const bal = getMemberChitBalance(memberId);
+  const cost = ev.cost;
+  if (bal >= cost) {
+    // Debit chits and auto-record fee payment
+    addChitDebit(memberId, cost, `${ev.title}`, eventId);
+    fees.push({
+      id: uid(), memberId, type: ev.feeType || 'Other', amount: cost,
+      date: today(), year: new Date().getFullYear(),
+      notes: 'Paid by chit', eventId
+    });
+    save();
+    return { ok: true, msg: `✓ Chit balance charged $${cost.toFixed(2)}. New balance: $${(bal - cost).toFixed(2)}` };
+  } else {
+    return {
+      ok: false,
+      msg: `Insufficient chit balance. Balance: $${bal.toFixed(2)}, needed: $${cost.toFixed(2)} (shortfall: $${(cost - bal).toFixed(2)})`,
+      bal, cost
+    };
+  }
+}
+
 function signInToEventCard(eventId, btn) {
   if (!session?.memberId) return;
   const geo = getGeoConfig();
-  if (!geo) { _recordEventSignIn(eventId); renderEvents(); return; }
+  const proceed = () => _finishCardSignIn(eventId, btn);
+  if (!geo) { proceed(); return; }
   if (!navigator.geolocation) { alert('Location services not available.'); return; }
   btn.textContent = '📍…'; btn.disabled = true;
   navigator.geolocation.getCurrentPosition(pos => {
     const dist = haversineMetres(pos.coords.latitude, pos.coords.longitude, geo.lat, geo.lng);
-    if (dist <= geo.radius) {
-      _recordEventSignIn(eventId);
-      btn.textContent = '✓ Signed In'; btn.style.opacity = '0.5';
-      renderEvents();
-    } else {
+    if (dist <= geo.radius) { proceed(); }
+    else {
       btn.textContent = '✋ Sign In'; btn.disabled = false;
       alert(`You must be at the clubhouse to sign in (you are ~${Math.round(dist)}m away).`);
     }
   }, () => { btn.textContent = '✋ Sign In'; btn.disabled = false; alert('Location access denied.'); },
   { timeout: 10000, maximumAge: 60000, enableHighAccuracy: true });
+}
+
+function _finishCardSignIn(eventId, btn) {
+  const chit = _chitCheckAndDebit(eventId, session.memberId);
+  if (!chit.ok) {
+    const proceed = confirm(`${chit.msg}\n\nSign in anyway without chit payment?`);
+    if (!proceed) { btn.textContent = '✋ Sign In'; btn.disabled = false; return; }
+  }
+  _recordEventSignIn(eventId, session.memberId);
+  btn.textContent = '✓ Signed In'; btn.style.opacity = '0.5';
+  if (chit.ok && chit.msg) alert(chit.msg);
+  renderEvents(); renderFees();
 }
 
 // Member sign-in from inside the modal
@@ -2761,20 +2885,29 @@ function signInToEvent() {
 }
 
 function _completeEventSignIn() {
-  _recordEventSignIn(_activeEventId);
   const statusEl = document.getElementById('evf-signin-status');
   const btn      = document.querySelector('#evf-signin-row button');
-  statusEl.style.color='#7fffaa'; statusEl.textContent='✓ You are signed in';
+  const chit = _chitCheckAndDebit(_activeEventId, session.memberId);
+  if (!chit.ok) {
+    const proceed = confirm(`${chit.msg}\n\nSign in anyway without chit payment?`);
+    if (!proceed) { btn.disabled=false; return; }
+    statusEl.style.color='#ffd166';
+    statusEl.textContent=`⚠ Signed in — balance insufficient ($${chit.bal.toFixed(2)} / $${chit.cost.toFixed(2)})`;
+  } else {
+    statusEl.style.color='#7fffaa';
+    statusEl.textContent = chit.msg || '✓ You are signed in';
+  }
+  _recordEventSignIn(_activeEventId, session.memberId);
   btn.disabled=true;
   _refreshEventModal(_activeEventId); renderEvents(); renderFees();
 }
 
-function _recordEventSignIn(eventId) {
-  if (!session?.memberId) return;
-  if (eventAttendance.some(a => a.eventId===eventId && a.memberId===session.memberId)) return;
-  eventAttendance.push({ id:uid(), eventId, memberId:session.memberId, signedInAt:new Date().toISOString() });
+function _recordEventSignIn(eventId, memberId) {
+  if (!memberId) return;
+  if (eventAttendance.some(a => a.eventId===eventId && a.memberId===memberId)) return;
+  eventAttendance.push({ id:uid(), eventId, memberId, signedInAt:new Date().toISOString() });
   const ev = events.find(x=>x.id===eventId);
-  const mb = members.find(x=>x.id===session.memberId);
+  const mb = members.find(x=>x.id===memberId);
   pushActivity('✋',`${mb?.first} ${mb?.last} signed in to "${ev?.title}"`);
   save();
 }
@@ -2783,10 +2916,13 @@ function adminSignInToEvent() {
   const memberId = document.getElementById('evf-attend-member').value;
   if (!memberId) { alert('Select a member.'); return; }
   if (eventAttendance.some(a => a.eventId===_activeEventId && a.memberId===memberId)) return;
-  eventAttendance.push({ id:uid(), eventId:_activeEventId, memberId, signedInAt:new Date().toISOString() });
-  const ev = events.find(x=>x.id===_activeEventId);
-  const mb = members.find(x=>x.id===memberId);
-  pushActivity('✋',`${mb?.first} ${mb?.last} signed in to "${ev?.title}"`);
+  const chit = _chitCheckAndDebit(_activeEventId, memberId);
+  _recordEventSignIn(_activeEventId, memberId);
+  const mb  = members.find(x=>x.id===memberId);
+  const bal = getMemberChitBalance(memberId);
+  if (!chit.ok) {
+    alert(`⚠ ${mb?.first} ${mb?.last} signed in but chit balance insufficient.\nBalance: $${chit.bal.toFixed(2)}, needed: $${chit.cost.toFixed(2)}`);
+  }
   save(); _refreshEventModal(_activeEventId); renderEvents(); renderFees();
 }
 
@@ -3006,6 +3142,11 @@ function renderFeeBalance() {
       <div style="text-align:center;">
         <div style="font-size:1.6rem;font-weight:700;color:#fff;">${myFees.length}</div>
         <div style="font-size:0.78rem;color:rgba(255,255,255,0.4);">Payments</div>
+      </div>
+      <div style="text-align:center;border-left:1px solid rgba(255,255,255,0.1);padding-left:24px;">
+        ${(()=>{ const cb = getMemberChitBalance(mid); return `
+        <div style="font-size:1.6rem;font-weight:700;color:${cb<0?'#ff8a8a':cb>0?'#7fffaa':'rgba(255,255,255,0.4)'};">$${cb.toFixed(2)}</div>
+        <div style="font-size:0.78rem;color:rgba(255,255,255,0.4);">💳 Chit Balance</div>`; })()}
       </div>
     </div>
     ${yearRows ? `<div style="margin-bottom:14px;">
