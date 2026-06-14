@@ -411,6 +411,7 @@
   <button onclick="showPanel('members')">Members</button>
   <button onclick="showPanel('log')">Work Log</button>
   <button onclick="showPanel('meetings')">Meetings</button>
+  <button onclick="showPanel('fees')">Fees</button>
 </nav>
 
 <main>
@@ -873,7 +874,117 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
 
   </div>
 
+  <!-- ── Fees ── -->
+  <div id="panel-fees" class="panel">
+
+    <!-- Add Fee (admin only) -->
+    <div class="card admin-only">
+      <div class="card-header"><h2>Record Fee Payment</h2></div>
+      <div class="form-row three">
+        <div>
+          <label>Member *</label>
+          <select id="fee-member"></select>
+        </div>
+        <div>
+          <label>Fee Type *</label>
+          <select id="fee-type"></select>
+        </div>
+        <div>
+          <label>Amount ($) *</label>
+          <input id="fee-amount" type="number" min="0" step="0.01" placeholder="0.00" />
+        </div>
+      </div>
+      <div class="form-row three">
+        <div>
+          <label>Date Paid *</label>
+          <input id="fee-date" type="date" />
+        </div>
+        <div>
+          <label>Year</label>
+          <input id="fee-year" type="number" min="2000" max="2099" placeholder="e.g. 2025" />
+        </div>
+        <div>
+          <label>Notes</label>
+          <input id="fee-notes" type="text" placeholder="Optional" />
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="addFee()">Record Payment</button>
+    </div>
+
+    <!-- Fee list -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Fee Payments</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <select id="fee-filter-member" onchange="renderFees()" style="font-size:0.8rem;padding:6px 10px;width:auto;">
+            <option value="">All Members</option>
+          </select>
+          <select id="fee-filter-type" onchange="renderFees()" style="font-size:0.8rem;padding:6px 10px;width:auto;">
+            <option value="">All Types</option>
+          </select>
+          <select id="fee-filter-year" onchange="renderFees()" style="font-size:0.8rem;padding:6px 10px;width:auto;">
+            <option value="">All Years</option>
+          </select>
+          <button class="btn btn-ghost btn-sm admin-only" onclick="exportFees()">⬇ Export</button>
+        </div>
+      </div>
+      <div id="fee-summary" style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;font-size:0.85rem;"></div>
+      <div class="table-wrap">
+        <table id="fees-table">
+          <thead><tr>
+            <th>Member</th>
+            <th>Fee Type</th>
+            <th>Amount</th>
+            <th>Date Paid</th>
+            <th>Year</th>
+            <th>Notes</th>
+            <th class="admin-only"></th>
+          </tr></thead>
+          <tbody id="fees-tbody"></tbody>
+        </table>
+      </div>
+      <div id="fees-empty" class="empty" style="display:none;">
+        <div class="icon">💰</div>No fee records found.
+      </div>
+    </div>
+
+    <!-- Fee Types (admin only) -->
+    <div class="card admin-only">
+      <div class="card-header"><h2>Fee Types</h2></div>
+      <div id="fee-types-list" style="margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input id="new-fee-type-input" type="text" placeholder="New fee type name"
+          style="flex:1;min-width:160px;"
+          onkeydown="if(event.key==='Enter')addFeeType()" />
+        <button class="btn btn-primary btn-sm" onclick="addFeeType()">+ Add</button>
+      </div>
+    </div>
+
+  </div>
+
 </main>
+
+<!-- Edit Fee Modal -->
+<div class="modal-bg" id="edit-fee-modal">
+  <div class="modal">
+    <h3>Edit Fee Record</h3>
+    <input type="hidden" id="ef-id" />
+    <div class="form-row three">
+      <div><label>Member</label><select id="ef-member"></select></div>
+      <div><label>Fee Type</label><select id="ef-type"></select></div>
+      <div><label>Amount ($)</label><input id="ef-amount" type="number" min="0" step="0.01" /></div>
+    </div>
+    <div class="form-row three">
+      <div><label>Date Paid</label><input id="ef-date" type="date" /></div>
+      <div><label>Year</label><input id="ef-year" type="number" min="2000" max="2099" /></div>
+      <div><label>Notes</label><input id="ef-notes" type="text" /></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px;">
+      <button class="btn btn-primary" onclick="saveEditFee()">Save</button>
+      <button class="btn btn-ghost" onclick="closeEditFee()">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <!-- Attendance Modal -->
 <div class="modal-bg" id="attendance-modal">
@@ -1051,10 +1162,13 @@ let tasks      = STORE.load('hyc_tasks');
 let workLog    = STORE.load('hyc_log');
 let activity   = STORE.load('hyc_activity');
 let categories = STORE.load('hyc_categories');
+let fees       = STORE.load('hyc_fees');
+let feeTypes   = STORE.load('hyc_fee_types');
 if (!categories.length) categories = [
   'Dock & Marina','Grounds & Landscaping','Clubhouse',
   'Fleet / Boats','Events','Safety & Equipment','Administration','Other'
 ];
+if (!feeTypes.length) feeTypes = ['Annual Dues','Slip Fee','Guest Fees','Race Entry','Other'];
 
 function save() {
   STORE.save('hyc_members',    members);
@@ -1062,12 +1176,16 @@ function save() {
   STORE.save('hyc_log',        workLog);
   STORE.save('hyc_activity',   activity);
   STORE.save('hyc_categories', categories);
+  STORE.save('hyc_fees',       fees);
+  STORE.save('hyc_fee_types',  feeTypes);
   if (_sbClient) {
     _pushToSupabase('hyc_members',    members);
     _pushToSupabase('hyc_tasks',      tasks);
     _pushToSupabase('hyc_log',        workLog);
     _pushToSupabase('hyc_activity',   activity);
     _pushToSupabase('hyc_categories', categories);
+    _pushToSupabase('hyc_fees',       fees);
+    _pushToSupabase('hyc_fee_types',  feeTypes);
   }
 }
 
@@ -1688,6 +1806,9 @@ function refreshAll() {
   }
   populateCategorySelects();
   renderCategoryManager();
+  populateFeeSelects();
+  renderFeeTypeManager();
+  renderFees();
   populateSelect('t-assignee', true);
   populateSelect('l-member');
   populateSelect('edit-assignee', true);
@@ -2002,7 +2123,7 @@ function roleDisplay(role) {
 const SB_CFG_KEY = 'hyc_sb_config';
 let   _sbClient  = null;
 let   _sbChannel = null;
-const SB_KEYS    = ['hyc_members','hyc_tasks','hyc_log','hyc_activity','hyc_meetings','hyc_attendance','hyc_categories'];
+const SB_KEYS    = ['hyc_members','hyc_tasks','hyc_log','hyc_activity','hyc_meetings','hyc_attendance','hyc_categories','hyc_fees','hyc_fee_types'];
 
 function getSbConfig() {
   try { return JSON.parse(localStorage.getItem(SB_CFG_KEY)) || null; } catch { return null; }
@@ -2052,6 +2173,8 @@ async function _pullKey(k) {
   if (k === 'hyc_meetings')   meetings   = v || [];
   if (k === 'hyc_attendance') attendance = v || [];
   if (k === 'hyc_categories') { if (Array.isArray(v) && v.length) categories = v; }
+  if (k === 'hyc_fees')       fees      = v || [];
+  if (k === 'hyc_fee_types')  { if (Array.isArray(v) && v.length) feeTypes = v; }
   STORE.save(k, v);
 }
 
@@ -2075,6 +2198,8 @@ async function loadAllFromSupabase() {
     if (row.key === 'hyc_meetings')   meetings   = v;
     if (row.key === 'hyc_attendance') attendance = v;
     if (row.key === 'hyc_categories') categories = v;
+    if (row.key === 'hyc_fees')       fees       = v;
+    if (row.key === 'hyc_fee_types')  feeTypes   = v;
     // Always write through to localStorage so next load is instant
     localStorage.setItem(row.key, JSON.stringify(v));
   }
@@ -2088,6 +2213,8 @@ async function loadAllFromSupabase() {
     'hyc_meetings':   meetings,
     'hyc_attendance': attendance,
     'hyc_categories': categories,
+    'hyc_fees':       fees,
+    'hyc_fee_types':  feeTypes,
   };
   for (const [key, val] of Object.entries(localSnapshot)) {
     if (!cloudKeys.has(key) && val.length > 0) _pushToSupabase(key, val);
@@ -2173,6 +2300,222 @@ function clearSyncConfig() {
 }
 
 // save() already handles Supabase pushes — defined near the top of the script
+
+// ── Fees ───────────────────────────────────────────────────────────────────
+
+function populateFeeTypeSelect(id, selectedVal) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const cur = selectedVal !== undefined ? selectedVal : el.value;
+  el.innerHTML = '<option value="">— Select —</option>' +
+    feeTypes.map(t => `<option${t === cur ? ' selected' : ''}>${t}</option>`).join('');
+}
+
+function renderFeeTypeManager() {
+  const list = document.getElementById('fee-types-list');
+  if (!list) return;
+  list.innerHTML = feeTypes.map((t, i) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <input type="text" value="${t.replace(/"/g,'&quot;')}" data-fi="${i}"
+        style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
+               border-radius:5px;padding:5px 8px;color:#fff;font-size:0.85rem;"
+        onchange="renameFeeType(${i}, this.value)" />
+      <button class="btn btn-danger btn-sm" onclick="deleteFeeType(${i})">✕</button>
+    </div>`).join('');
+}
+
+function addFeeType() {
+  const inp = document.getElementById('new-fee-type-input');
+  const name = inp.value.trim();
+  if (!name) return;
+  if (feeTypes.includes(name)) { alert('Fee type already exists.'); return; }
+  feeTypes.push(name);
+  inp.value = '';
+  save(); populateFeeSelects(); renderFeeTypeManager();
+}
+
+function renameFeeType(idx, newName) {
+  newName = newName.trim();
+  if (!newName) { renderFeeTypeManager(); return; }
+  if (feeTypes.includes(newName) && feeTypes[idx] !== newName) {
+    alert('Fee type already exists.'); renderFeeTypeManager(); return;
+  }
+  const old = feeTypes[idx];
+  feeTypes[idx] = newName;
+  fees.forEach(f => { if (f.type === old) f.type = newName; });
+  save(); populateFeeSelects(); renderFeeTypeManager(); renderFees();
+}
+
+function deleteFeeType(idx) {
+  const name = feeTypes[idx];
+  const inUse = fees.filter(f => f.type === name).length;
+  if (inUse && !confirm(`"${name}" is used in ${inUse} record(s). Delete anyway?`)) return;
+  feeTypes.splice(idx, 1);
+  save(); populateFeeSelects(); renderFeeTypeManager();
+}
+
+function populateFeeSelects() {
+  ['fee-type','ef-type'].forEach(id => populateFeeTypeSelect(id));
+  // Filter dropdowns
+  const fm = document.getElementById('fee-filter-member');
+  const ft = document.getElementById('fee-filter-type');
+  const fy = document.getElementById('fee-filter-year');
+  if (fm) {
+    const cur = fm.value;
+    fm.innerHTML = '<option value="">All Members</option>' +
+      members.map(m => `<option value="${m.id}"${m.id===cur?' selected':''}>${m.first} ${m.last}</option>`).join('');
+  }
+  if (ft) {
+    const cur = ft.value;
+    ft.innerHTML = '<option value="">All Types</option>' +
+      feeTypes.map(t => `<option${t===cur?' selected':''}>${t}</option>`).join('');
+  }
+  if (fy) {
+    const cur = fy.value;
+    const years = [...new Set(fees.map(f => f.year).filter(Boolean))].sort((a,b) => b-a);
+    fy.innerHTML = '<option value="">All Years</option>' +
+      years.map(y => `<option${y==cur?' selected':''}>${y}</option>`).join('');
+  }
+  // Add fee member select
+  const fm2 = document.getElementById('fee-member');
+  if (fm2) {
+    const cur = fm2.value;
+    fm2.innerHTML = '<option value="">— Select —</option>' +
+      members.map(m => `<option value="${m.id}"${m.id===cur?' selected':''}>${m.first} ${m.last}</option>`).join('');
+  }
+  const em = document.getElementById('ef-member');
+  if (em) {
+    const cur = em.value;
+    em.innerHTML = '<option value="">— Select —</option>' +
+      members.map(m => `<option value="${m.id}"${m.id===cur?' selected':''}>${m.first} ${m.last}</option>`).join('');
+  }
+}
+
+function addFee() {
+  const memberId = document.getElementById('fee-member').value;
+  const type     = document.getElementById('fee-type').value;
+  const amount   = parseFloat(document.getElementById('fee-amount').value);
+  const date     = document.getElementById('fee-date').value;
+  const year     = parseInt(document.getElementById('fee-year').value, 10) || new Date().getFullYear();
+  const notes    = document.getElementById('fee-notes').value.trim();
+  if (!memberId || !type || isNaN(amount) || !date) {
+    alert('Member, fee type, amount and date are required.'); return;
+  }
+  const mb = members.find(m => m.id === memberId);
+  fees.push({ id: uid(), memberId, type, amount, date, year, notes });
+  pushActivity('💰', `Fee recorded: ${mb?.first} ${mb?.last} — ${type} $${amount.toFixed(2)}`);
+  document.getElementById('fee-amount').value = '';
+  document.getElementById('fee-notes').value  = '';
+  save(); populateFeeSelects(); renderFees();
+}
+
+function renderFees() {
+  const filterMember = document.getElementById('fee-filter-member')?.value || '';
+  const filterType   = document.getElementById('fee-filter-type')?.value   || '';
+  const filterYear   = document.getElementById('fee-filter-year')?.value   || '';
+
+  let list = [...fees].sort((a,b) => b.date.localeCompare(a.date));
+  if (filterMember) list = list.filter(f => f.memberId === filterMember);
+  if (filterType)   list = list.filter(f => f.type === filterType);
+  if (filterYear)   list = list.filter(f => String(f.year) === String(filterYear));
+
+  // Members see only their own fees
+  if (isMember() && !isAdmin()) list = list.filter(f => f.memberId === session?.memberId);
+
+  const tbody  = document.getElementById('fees-tbody');
+  const empty  = document.getElementById('fees-empty');
+  const table  = document.getElementById('fees-table');
+  const summary = document.getElementById('fee-summary');
+
+  if (!list.length) {
+    tbody.innerHTML = ''; table.style.display = 'none'; empty.style.display = '';
+    if (summary) summary.innerHTML = '';
+    return;
+  }
+  table.style.display = ''; empty.style.display = 'none';
+
+  const total = list.reduce((s, f) => s + (f.amount || 0), 0);
+  if (summary) {
+    summary.innerHTML = `
+      <span style="color:var(--gold-light);">Total: <strong>$${total.toFixed(2)}</strong></span>
+      <span style="color:rgba(255,255,255,0.4);">${list.length} record${list.length!==1?'s':''}</span>`;
+  }
+
+  tbody.innerHTML = list.map(f => {
+    const mb = members.find(m => m.id === f.memberId);
+    const name = mb ? `${mb.first} ${mb.last}` : 'Unknown';
+    return `<tr>
+      <td><strong>${name}</strong></td>
+      <td>${f.type}</td>
+      <td style="color:var(--gold-light);font-weight:600;">$${(f.amount||0).toFixed(2)}</td>
+      <td>${fmtDate(f.date)}</td>
+      <td>${f.year || ''}</td>
+      <td style="color:rgba(255,255,255,0.5);font-size:0.82rem;">${f.notes || ''}</td>
+      <td class="admin-only" style="white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick="openEditFee('${f.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteFee('${f.id}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function deleteFee(id) {
+  if (!confirm('Delete this fee record?')) return;
+  fees = fees.filter(f => f.id !== id);
+  save(); populateFeeSelects(); renderFees();
+}
+
+function openEditFee(id) {
+  const f = fees.find(x => x.id === id); if (!f) return;
+  document.getElementById('ef-id').value     = id;
+  document.getElementById('ef-amount').value = f.amount;
+  document.getElementById('ef-date').value   = f.date;
+  document.getElementById('ef-year').value   = f.year || '';
+  document.getElementById('ef-notes').value  = f.notes || '';
+  populateFeeTypeSelect('ef-type', f.type);
+  const em = document.getElementById('ef-member');
+  if (em) {
+    em.innerHTML = '<option value="">— Select —</option>' +
+      members.map(m => `<option value="${m.id}"${m.id===f.memberId?' selected':''}>${m.first} ${m.last}</option>`).join('');
+  }
+  document.getElementById('edit-fee-modal').classList.add('open');
+}
+
+function closeEditFee() {
+  document.getElementById('edit-fee-modal').classList.remove('open');
+}
+
+function saveEditFee() {
+  const id     = document.getElementById('ef-id').value;
+  const f      = fees.find(x => x.id === id); if (!f) return;
+  f.memberId   = document.getElementById('ef-member').value;
+  f.type       = document.getElementById('ef-type').value;
+  f.amount     = parseFloat(document.getElementById('ef-amount').value) || 0;
+  f.date       = document.getElementById('ef-date').value;
+  f.year       = parseInt(document.getElementById('ef-year').value, 10) || new Date().getFullYear();
+  f.notes      = document.getElementById('ef-notes').value.trim();
+  save(); closeEditFee(); populateFeeSelects(); renderFees();
+}
+
+function exportFees() {
+  const filterMember = document.getElementById('fee-filter-member')?.value || '';
+  const filterType   = document.getElementById('fee-filter-type')?.value   || '';
+  const filterYear   = document.getElementById('fee-filter-year')?.value   || '';
+  let list = [...fees].sort((a,b) => b.date.localeCompare(a.date));
+  if (filterMember) list = list.filter(f => f.memberId === filterMember);
+  if (filterType)   list = list.filter(f => f.type === filterType);
+  if (filterYear)   list = list.filter(f => String(f.year) === String(filterYear));
+  const rows = [['Member','Fee Type','Amount','Date Paid','Year','Notes'],
+    ...list.map(f => {
+      const mb = members.find(m => m.id === f.memberId);
+      return [`${mb?.first||''} ${mb?.last||''}`, f.type, f.amount, f.date, f.year, f.notes||''];
+    })];
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'hyc-fees.csv';
+  a.click();
+}
 
 // ── Meetings ───────────────────────────────────────────────────────────────
 
@@ -2626,6 +2969,8 @@ save();
 
 document.getElementById('l-date').value   = today();
 document.getElementById('mtg-date').value = today();
+document.getElementById('fee-date').value = today();
+document.getElementById('fee-year').value = new Date().getFullYear();
 msCreate('ms-m-role');
 msCreate('ms-em-role');
 applyLogo(); // apply immediately so logo shows before async Supabase load
