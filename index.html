@@ -596,6 +596,33 @@
         <button class="btn btn-primary btn-sm" onclick="addCategory()">+ Add</button>
       </div>
       <hr style="border-color:rgba(255,255,255,0.1);margin:20px 0;" />
+      <h3 style="color:var(--gold-light);font-size:1rem;margin-bottom:6px;">⏱ Work Hours Requirement</h3>
+      <p style="font-size:0.82rem;color:rgba(255,255,255,0.5);margin-bottom:14px;">
+        Each member starts with this many required volunteer hours. Logged work is deducted automatically.
+      </p>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <input id="wh-default-input" type="number" min="1" step="1" placeholder="25"
+          style="width:100px;" />
+        <button class="btn btn-primary btn-sm" onclick="saveWorkHoursFromInput()">Save</button>
+        <span id="wh-status" style="font-size:0.82rem;"></span>
+      </div>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:20px 0;" />
+      <h3 style="color:var(--gold-light);font-size:1rem;margin-bottom:6px;">📲 Work Log Notifications</h3>
+      <p style="font-size:0.82rem;color:rgba(255,255,255,0.5);margin-bottom:6px;">
+        When a member submits a work log, a JSON payload is POSTed to this webhook URL.
+        Connect it to <strong style="color:rgba(255,255,255,0.7);">Zapier</strong> or <strong style="color:rgba(255,255,255,0.7);">Make</strong> to forward an SMS via Twilio.
+      </p>
+      <p style="font-size:0.78rem;color:rgba(255,255,255,0.35);margin-bottom:14px;">
+        Payload includes: <code>member</code>, <code>phone</code>, <code>task</code>, <code>hours</code>, <code>date</code>, <code>notes</code>, <code>remaining</code>, <code>required</code>.
+      </p>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <input id="notif-webhook-input" type="url" placeholder="https://hooks.zapier.com/…"
+          style="flex:1;min-width:260px;" />
+        <button class="btn btn-primary btn-sm" onclick="saveNotifWebhookFromInput()">Save</button>
+        <button class="btn btn-ghost btn-sm" onclick="testNotifWebhook()">Test</button>
+        <span id="notif-webhook-status" style="font-size:0.82rem;"></span>
+      </div>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:20px 0;" />
       <h3 style="color:var(--gold-light);font-size:1rem;margin-bottom:14px;">☁ Cloud Sync (Supabase)</h3>
       <p style="font-size:0.82rem;color:rgba(255,255,255,0.5);margin-bottom:14px;">
         Enables real-time shared data across all devices.
@@ -804,6 +831,15 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
           Mark task complete
         </label>
       </div>
+    </div>
+
+    <!-- Hours Balance summary -->
+    <div class="card" id="hours-balance-card">
+      <div class="card-header">
+        <h2>⏱ Work Hours Balance</h2>
+        <span id="wh-default-badge" style="font-size:0.82rem;color:rgba(255,255,255,0.5);"></span>
+      </div>
+      <div id="hours-balance-body"></div>
     </div>
 
     <div class="card">
@@ -1345,6 +1381,48 @@ let feeTypes   = STORE.load('hyc_fee_types');
 let events          = STORE.load('hyc_events');
 let eventAttendance = STORE.load('hyc_event_attendance');
 let chitTransactions = STORE.load('hyc_chits');
+
+// Work hours quota (stored as a single number, not an array)
+const WH_KEY = 'hyc_work_hours_default';
+let workHoursDefault = parseFloat(localStorage.getItem(WH_KEY)) || 25;
+function saveWorkHoursDefault(val) {
+  workHoursDefault = parseFloat(val) || 25;
+  localStorage.setItem(WH_KEY, workHoursDefault);
+}
+
+// Notification webhook
+const WH_NOTIF_KEY = 'hyc_notif_webhook';
+function getNotifWebhook() { return localStorage.getItem(WH_NOTIF_KEY) || ''; }
+function saveNotifWebhook(url) { localStorage.setItem(WH_NOTIF_KEY, url.trim()); }
+
+function getMemberLoggedHours(memberId) {
+  return workLog.filter(e => e.memberId === memberId).reduce((s, e) => s + (e.hours || 0), 0);
+}
+function getMemberHoursBalance(memberId) {
+  return workHoursDefault - getMemberLoggedHours(memberId);
+}
+
+async function sendWorkLogAlert(entry, member) {
+  const webhookUrl = getNotifWebhook();
+  if (!webhookUrl) return;
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        member:    `${member.first} ${member.last}`,
+        phone:     member.phone || '',
+        task:      entry.title,
+        hours:     entry.hours,
+        date:      entry.date,
+        notes:     entry.notes || '',
+        remaining: getMemberHoursBalance(member.id),
+        required:  workHoursDefault,
+      })
+    });
+  } catch(e) { /* silent — don't block log submission */ }
+}
+
 if (!categories.length) categories = [
   'Dock & Marina','Grounds & Landscaping','Clubhouse',
   'Fleet / Boats','Events','Safety & Equipment','Administration','Other'
@@ -1741,6 +1819,8 @@ function addLog() {
   }
 
   save();
+  const mb = members.find(m => m.id === memberId);
+  if (mb) sendWorkLogAlert(entry, mb);
   document.getElementById('l-hours').value    = '';
   document.getElementById('l-title').value    = '';
   document.getElementById('l-timeline').value = '';
@@ -1991,6 +2071,12 @@ function refreshAll() {
     if (lngEl) lngEl.value = geo.lng;
     if (radEl) radEl.value = geo.radius;
   }
+  // Pre-fill work hours + webhook settings
+  const whEl = document.getElementById('wh-default-input');
+  if (whEl) whEl.value = workHoursDefault;
+  const nwEl = document.getElementById('notif-webhook-input');
+  if (nwEl) nwEl.value = getNotifWebhook();
+
   populateCategorySelects();
   renderCategoryManager();
   populateFeeSelects();
@@ -2007,6 +2093,7 @@ function refreshAll() {
   renderMembers();
   renderTasks();
   renderLog();
+  renderHoursBalance();
   renderDashboard();
   renderMeetings();
   applyPermissions();
@@ -3084,6 +3171,40 @@ function addFee() {
   save(); populateFeeSelects(); renderFees();
 }
 
+function renderHoursBalance() {
+  const body  = document.getElementById('hours-balance-body');
+  const badge = document.getElementById('wh-default-badge');
+  if (!body) return;
+  if (badge) badge.textContent = `Required: ${workHoursDefault} hrs / member`;
+
+  // Members see only their own row
+  const list = (isMember() && !isAdmin())
+    ? members.filter(m => m.id === session?.memberId)
+    : [...members].sort((a, b) => `${a.last}${a.first}`.localeCompare(`${b.last}${b.first}`));
+
+  if (!list.length) { body.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:0.85rem;">No members found.</p>'; return; }
+
+  body.innerHTML = `<div style="display:grid;gap:8px;">` +
+    list.map(m => {
+      const logged  = getMemberLoggedHours(m.id);
+      const balance = getMemberHoursBalance(m.id);
+      const pct     = Math.min(100, Math.round((logged / workHoursDefault) * 100));
+      const color   = balance <= 0 ? '#4ade80' : balance <= workHoursDefault * 0.25 ? 'var(--gold-light)' : 'rgba(255,255,255,0.75)';
+      return `<div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;">
+        <div style="flex:1;min-width:120px;font-weight:600;">${m.first} ${m.last}</div>
+        <div style="flex:2;min-width:120px;">
+          <div style="background:rgba(255,255,255,0.1);border-radius:4px;height:8px;overflow:hidden;">
+            <div style="width:${pct}%;height:100%;background:${balance<=0?'#4ade80':'var(--gold-light)'};border-radius:4px;transition:width 0.3s;"></div>
+          </div>
+        </div>
+        <div style="font-size:0.82rem;color:rgba(255,255,255,0.5);white-space:nowrap;">${logged.toFixed(1)} / ${workHoursDefault} hrs</div>
+        <div style="font-weight:700;white-space:nowrap;min-width:80px;text-align:right;color:${color};">
+          ${balance <= 0 ? '✓ Complete' : `${balance.toFixed(1)} hrs left`}
+        </div>
+      </div>`;
+    }).join('') + `</div>`;
+}
+
 function renderFeeBalance() {
   const card = document.getElementById('fee-balance-card');
   const body = document.getElementById('fee-balance-body');
@@ -3388,6 +3509,43 @@ const GEO_CFG_KEY = 'hyc_geo_config';
 
 function getGeoConfig() {
   try { return JSON.parse(localStorage.getItem(GEO_CFG_KEY)) || null; } catch { return null; }
+}
+
+function saveWorkHoursFromInput() {
+  const val = parseFloat(document.getElementById('wh-default-input').value);
+  if (!val || val < 1) { showStatus('wh-status', 'Enter a valid number.', 'red'); return; }
+  saveWorkHoursDefault(val);
+  showStatus('wh-status', `Saved — ${val} hrs required per member.`, 'var(--gold-light)');
+  renderHoursBalance();
+}
+
+function saveNotifWebhookFromInput() {
+  const url = document.getElementById('notif-webhook-input').value.trim();
+  saveNotifWebhook(url);
+  showStatus('notif-webhook-status', url ? 'Webhook saved.' : 'Cleared.', 'var(--gold-light)');
+}
+
+async function testNotifWebhook() {
+  const url = document.getElementById('notif-webhook-input').value.trim() || getNotifWebhook();
+  if (!url) { showStatus('notif-webhook-status', 'No webhook URL set.', 'red'); return; }
+  showStatus('notif-webhook-status', 'Sending test…', 'rgba(255,255,255,0.5)');
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ member: 'Test Member', phone: '', task: 'Test Task', hours: 1,
+        date: today(), notes: 'Test notification', remaining: 24, required: workHoursDefault })
+    });
+    showStatus('notif-webhook-status', '✓ Test sent.', '#4ade80');
+  } catch(e) {
+    showStatus('notif-webhook-status', `Error: ${e.message}`, 'red');
+  }
+}
+
+function showStatus(id, msg, color) {
+  const el = document.getElementById(id); if (!el) return;
+  el.textContent = msg; el.style.color = color;
+  setTimeout(() => { if (el.textContent === msg) { el.textContent = ''; } }, 4000);
 }
 
 function saveGeoConfig() {
