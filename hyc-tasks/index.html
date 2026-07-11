@@ -807,7 +807,7 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
       <div class="form-row three">
         <div>
           <label>Task</label>
-          <select id="l-task" onchange="autoFillLogTitle(this.value)"></select>
+          <select id="l-task" onchange="autoFillLogTitle(this.value);checkBoatRequired()"></select>
         </div>
         <div>
           <label>Timeline</label>
@@ -816,6 +816,13 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
         <div>
           <label>Date *</label>
           <input id="l-date" type="date" />
+        </div>
+      </div>
+      <!-- Boat selector — shown only for launch/haul tasks -->
+      <div id="l-boats-row" class="form-row single" style="display:none;">
+        <div>
+          <label style="color:var(--gold-light);">Member Boats * <span style="font-weight:400;font-size:0.8rem;color:rgba(255,255,255,0.45);">(select all boats being launched/hauled)</span></label>
+          <div id="l-boats-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;min-height:38px;"></div>
         </div>
       </div>
       <div class="form-row single">
@@ -853,7 +860,7 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Date</th><th>Member</th><th>Task Title</th><th>Timeline</th><th>Linked Task</th><th>Status</th><th>Hours</th><th>Notes</th><th>Del</th></tr>
+            <tr><th>Date</th><th>Member</th><th>Task Title</th><th>Timeline</th><th>Linked Task</th><th>Status</th><th>Hours</th><th>Boats</th><th>Notes</th><th>Del</th></tr>
           </thead>
           <tbody id="log-table"></tbody>
         </table>
@@ -1805,9 +1812,13 @@ function addLog() {
   const title    = document.getElementById('l-title').value.trim();
   if (!memberId || !hours || !date || !title) { alert('Member, task title, hours, and date are required.'); return; }
 
+  const boats = isLaunchHaulTask(taskId) ? getSelectedBoats() : [];
+  if (isLaunchHaulTask(taskId) && !boats.length) { alert('Please select at least one member boat for this launch/haul task.'); return; }
+
   const entry = { id: uid(), memberId, taskId, title, hours, date,
     timeline: document.getElementById('l-timeline').value.trim(),
-    notes:    document.getElementById('l-notes').value.trim() };
+    notes:    document.getElementById('l-notes').value.trim(),
+    boats };
   workLog.unshift(entry);
 
   const mn = memberName(memberId);
@@ -1906,6 +1917,7 @@ function renderLog() {
     <td style="font-size:0.8rem">${linkedTaskCell(l)}</td>
     <td>${logStatusBadge(l.taskId)}</td>
     <td><strong style="color:var(--gold-light)">${(+l.hours).toFixed(1)}</strong></td>
+    <td style="font-size:0.8rem;color:rgba(255,255,255,0.7);">${l.boats && l.boats.length ? l.boats.map(b=>`⛵ ${b.name}${b.size?` (${b.size}ft)`:''}`).join('<br>') : '—'}</td>
     <td style="color:rgba(255,255,255,0.6)">${l.notes || '—'}</td>
     <td>${canEditLog(l) ? `
       <button class="btn btn-ghost btn-sm" onclick="openEditLog('${l.id}')">Edit</button>
@@ -2032,6 +2044,50 @@ function logStatusBadge(taskId) {
   if (t.status === 'done') return statusBadge('done', t.due);
   if (t.noAssign || !t.assignee) return '';
   return statusBadge(t.status, t.due);
+}
+
+function isLaunchHaulTask(taskId) {
+  if (!taskId) return false;
+  const t = tasks.find(x => x.id === taskId);
+  if (!t) return false;
+  return /launch|haul/i.test(t.title);
+}
+
+function checkBoatRequired() {
+  const taskId = document.getElementById('l-task').value;
+  const row    = document.getElementById('l-boats-row');
+  if (!row) return;
+  if (isLaunchHaulTask(taskId)) {
+    row.style.display = '';
+    renderBoatChecklist();
+  } else {
+    row.style.display = 'none';
+  }
+}
+
+function renderBoatChecklist() {
+  const container = document.getElementById('l-boats-list');
+  if (!container) return;
+  const boats = members.filter(m => m.boat).map(m => ({
+    id:    m.id,
+    label: `${m.boat}${m.boatSize ? ` (${m.boatSize}ft)` : ''} — ${m.first} ${m.last}`
+  }));
+  if (!boats.length) {
+    container.innerHTML = '<span style="color:rgba(255,255,255,0.4);font-size:0.85rem;">No member boats registered. Add boats via the Members tab.</span>';
+    return;
+  }
+  container.innerHTML = boats.map(b => `
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 10px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:0.85rem;white-space:nowrap;">
+      <input type="checkbox" class="l-boat-cb" value="${b.id}" style="width:auto;margin:0;" />
+      ${b.label}
+    </label>`).join('');
+}
+
+function getSelectedBoats() {
+  return [...document.querySelectorAll('.l-boat-cb:checked')].map(cb => {
+    const m = members.find(x => x.id === cb.value);
+    return m ? { memberId: m.id, name: m.boat, size: m.boatSize, owner: `${m.first} ${m.last}` } : null;
+  }).filter(Boolean);
 }
 
 function autoFillLogTitle(taskId) {
