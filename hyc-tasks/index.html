@@ -869,6 +869,26 @@ CREATE POLICY "open" ON app_store FOR ALL USING (true) WITH CHECK (true);</div>
         <div class="icon">📝</div>No work logged yet.
       </div>
     </div>
+
+    <!-- Work Hours Report (admin only) -->
+    <div class="card admin-only" id="work-report-card">
+      <div class="card-header">
+        <h2>📊 Work Hours Report</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <select id="rpt-timeline" onchange="renderWorkReport()" style="font-size:0.8rem;padding:6px 10px;width:auto;">
+            <option value="">All Timelines</option>
+          </select>
+          <select id="rpt-group" onchange="renderWorkReport()" style="font-size:0.8rem;padding:6px 10px;width:auto;">
+            <option value="day">Group by Day</option>
+            <option value="boat">Group by Boat</option>
+            <option value="day-boat">Day → Boat</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="exportWorkReport()">⬇ Export CSV</button>
+        </div>
+      </div>
+      <div id="work-report-body"></div>
+    </div>
+
   </div>
 
 
@@ -1925,6 +1945,154 @@ function renderLog() {
   </tr>`).join('');
 }
 
+// ── Work Hours Report ──────────────────────────────────────────────────────
+
+function populateReportTimelines() {
+  const el = document.getElementById('rpt-timeline');
+  if (!el) return;
+  const cur = el.value;
+  const timelines = [...new Set(workLog.map(l => l.timeline).filter(Boolean))].sort();
+  el.innerHTML = '<option value="">All Timelines</option>' +
+    timelines.map(t => `<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
+}
+
+function renderWorkReport() {
+  const body     = document.getElementById('work-report-body'); if (!body) return;
+  const timeline = document.getElementById('rpt-timeline')?.value || '';
+  const group    = document.getElementById('rpt-group')?.value   || 'day';
+
+  let entries = timeline ? workLog.filter(l => l.timeline === timeline) : [...workLog];
+  if (!entries.length) {
+    body.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:0.85rem;padding:8px 0;">No entries match the selected filter.</p>';
+    return;
+  }
+
+  const fmt = d => d ? fmtDate(d) : '—';
+
+  if (group === 'day') {
+    // Group by date
+    const byDay = {};
+    entries.forEach(l => { (byDay[l.date] = byDay[l.date] || []).push(l); });
+    const days = Object.keys(byDay).sort().reverse();
+    body.innerHTML = days.map(day => {
+      const rows = byDay[day];
+      const total = rows.reduce((s,l) => s+(+l.hours||0), 0);
+      return `<div style="margin-bottom:18px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <strong style="color:var(--gold-light);font-size:0.95rem;">${fmt(day)}</strong>
+          <span style="font-size:0.82rem;color:rgba(255,255,255,0.5);">${total.toFixed(1)} hrs total</span>
+        </div>
+        ${_reportTable(rows)}
+      </div>`;
+    }).join('');
+
+  } else if (group === 'boat') {
+    // Group by boat — only entries with boats; others in "No Boat" bucket
+    const byBoat = {};
+    entries.forEach(l => {
+      if (l.boats && l.boats.length) {
+        l.boats.forEach(b => {
+          const key = `${b.name}${b.size ? ` (${b.size}ft)` : ''}`;
+          (byBoat[key] = byBoat[key] || []).push(l);
+        });
+      } else {
+        (byBoat['— No Boat'] = byBoat['— No Boat'] || []).push(l);
+      }
+    });
+    body.innerHTML = Object.keys(byBoat).sort().map(boat => {
+      const rows  = byBoat[boat];
+      const total = rows.reduce((s,l) => s+(+l.hours||0), 0);
+      return `<div style="margin-bottom:18px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <strong style="color:var(--gold-light);font-size:0.95rem;">⛵ ${boat}</strong>
+          <span style="font-size:0.82rem;color:rgba(255,255,255,0.5);">${total.toFixed(1)} hrs · ${rows.length} entr${rows.length===1?'y':'ies'}</span>
+        </div>
+        ${_reportTable(rows)}
+      </div>`;
+    }).join('');
+
+  } else {
+    // Day → Boat: group by date, within each date sub-group by boat
+    const byDay = {};
+    entries.forEach(l => { (byDay[l.date] = byDay[l.date] || []).push(l); });
+    const days = Object.keys(byDay).sort().reverse();
+    body.innerHTML = days.map(day => {
+      const dayRows  = byDay[day];
+      const dayTotal = dayRows.reduce((s,l) => s+(+l.hours||0), 0);
+      const byBoat   = {};
+      dayRows.forEach(l => {
+        if (l.boats && l.boats.length) {
+          l.boats.forEach(b => {
+            const key = `${b.name}${b.size ? ` (${b.size}ft)` : ''}`;
+            (byBoat[key] = byBoat[key] || []).push(l);
+          });
+        } else {
+          (byBoat['— No Boat'] = byBoat['— No Boat'] || []).push(l);
+        }
+      });
+      return `<div style="margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <strong style="color:var(--gold-light);font-size:0.95rem;">${fmt(day)}</strong>
+          <span style="font-size:0.82rem;color:rgba(255,255,255,0.5);">${dayTotal.toFixed(1)} hrs total</span>
+        </div>
+        ${Object.keys(byBoat).sort().map(boat => {
+          const bRows  = byBoat[boat];
+          const bTotal = bRows.reduce((s,l) => s+(+l.hours||0), 0);
+          return `<div style="margin-left:16px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+              <span style="color:rgba(255,255,255,0.75);font-size:0.85rem;font-weight:600;">⛵ ${boat}</span>
+              <span style="font-size:0.8rem;color:rgba(255,255,255,0.4);">${bTotal.toFixed(1)} hrs</span>
+            </div>
+            ${_reportTable(bRows)}
+          </div>`;
+        }).join('')}
+      </div>`;
+    }).join('');
+  }
+}
+
+function _reportTable(rows) {
+  return `<div class="table-wrap" style="margin:0;">
+    <table style="font-size:0.82rem;">
+      <thead><tr>
+        <th>Date</th><th>Member</th><th>Task</th><th>Timeline</th><th>Boats</th><th>Hours</th><th>Notes</th>
+      </tr></thead>
+      <tbody>${rows.sort((a,b)=>b.date.localeCompare(a.date)).map(l => `<tr>
+        <td style="white-space:nowrap">${fmtDate(l.date)}</td>
+        <td>${memberName(l.memberId)}</td>
+        <td>${l.title || '—'}</td>
+        <td style="color:rgba(255,255,255,0.5)">${l.timeline || '—'}</td>
+        <td style="color:rgba(255,255,255,0.7)">${l.boats && l.boats.length ? l.boats.map(b=>`⛵ ${b.name}`).join(', ') : '—'}</td>
+        <td><strong style="color:var(--gold-light)">${(+l.hours).toFixed(1)}</strong></td>
+        <td style="color:rgba(255,255,255,0.5)">${l.notes || '—'}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>`;
+}
+
+function exportWorkReport() {
+  const timeline = document.getElementById('rpt-timeline')?.value || '';
+  const entries  = timeline ? workLog.filter(l => l.timeline === timeline) : [...workLog];
+  const rows     = [['Date','Member','Task','Timeline','Boats','Hours','Notes']];
+  entries.sort((a,b) => b.date.localeCompare(a.date)).forEach(l => {
+    rows.push([
+      l.date,
+      memberName(l.memberId),
+      l.title || '',
+      l.timeline || '',
+      l.boats && l.boats.length ? l.boats.map(b=>b.name).join('; ') : '',
+      (+l.hours).toFixed(1),
+      l.notes || ''
+    ]);
+  });
+  const csv  = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `work-report${timeline ? '-' + timeline.replace(/\s+/g,'-') : ''}.csv`;
+  a.click();
+}
+
 // ── Dashboard ──────────────────────────────────────────────────────────────
 
 function renderDashboard() {
@@ -2150,6 +2318,8 @@ function refreshAll() {
   renderTasks();
   renderLog();
   renderHoursBalance();
+  populateReportTimelines();
+  renderWorkReport();
   renderDashboard();
   renderMeetings();
   applyPermissions();
